@@ -79,9 +79,15 @@ protected:
 	uint32_t lastFPS = 0;
 	// Vulkan instance, stores all per-application states
 	VkInstance instance;
+
+#ifdef MGPU
 	// Physical device (GPU) that Vulkan will ise
-	VkPhysicalDevice physicalDevice;
-	// Stores physical device properties (for e.g. checking device limits)
+	VkPhysicalDevice physicalDevice[2];
+#else 
+    VkPhysicalDevice physicalDevice;
+#endif
+	
+// Stores physical device properties (for e.g. checking device limits)
 	VkPhysicalDeviceProperties deviceProperties;
 	// Stores phyiscal device features (for e.g. checking if a feature is available)
 	VkPhysicalDeviceFeatures deviceFeatures;
@@ -91,7 +97,13 @@ protected:
 	// todo: getter? should always point to VulkanDevice->device
 	VkDevice device;
 	/** @brief Encapsulated physical and logical vulkan device */
-	vk::VulkanDevice *vulkanDevice;
+
+#ifdef MGPU
+	vk::VulkanDevice *vulkanDevice[2];
+#else
+    vk::VulkanDevice *vulkanDevice;
+#endif
+
 	// Handle to the device graphics queue that command buffers are submitted to
 	VkQueue queue;
 	// Color buffer format

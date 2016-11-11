@@ -825,6 +825,53 @@ void VulkanExampleBase::initVulkan(bool enableValidation)
 		vkTools::exitFatal("Could not enumerate phyiscal devices : \n" + vkTools::errorString(err), "Fatal error");
 	}
 
+#ifdef MGPU
+    
+    for(int gpuId = 0; gpuId < gpuCount; gpuId++)
+    {
+        physicalDevice[gpuId] = physicalDevices[gpuId];
+
+        // Vulkan device creation
+        // This is handled by a separate class that gets a logical device representation
+        // and encapsulates functions related to a device
+        vulkanDevice[gpuId] = new vk::VulkanDevice(physicalDevice[gpuId]);
+        VK_CHECK_RESULT(vulkanDevice[gpuId]->createLogicalDevice(enabledFeatures));
+        device = vulkanDevice[gpuId]->logicalDevice;
+
+        // todo: remove
+        // Store properties (including limits) and features of the phyiscal device
+        // So examples can check against them and see if a feature is actually supported
+        vkGetPhysicalDeviceProperties(physicalDevice[gpuId], &deviceProperties);
+        vkGetPhysicalDeviceFeatures(physicalDevice[gpuId], &deviceFeatures);
+        // Gather physical device memory properties
+        vkGetPhysicalDeviceMemoryProperties(physicalDevice[gpuId], &deviceMemoryProperties);
+
+        // Get a graphics queue from the device
+        vkGetDeviceQueue(device, vulkanDevice[gpuId]->queueFamilyIndices.graphics, 0, &queue);
+
+        // Find a suitable depth format
+        VkBool32 validDepthFormat = vkTools::getSupportedDepthFormat(physicalDevice[gpuId], &depthFormat);
+        assert(validDepthFormat);
+
+        swapChain.connect(instance, physicalDevice[gpuId], device);
+
+        // Create synchronization objects
+        VkSemaphoreCreateInfo semaphoreCreateInfo = vkTools::initializers::semaphoreCreateInfo();
+        // Create a semaphore used to synchronize image presentation
+        // Ensures that the image is displayed before we start submitting new commands to the queu
+        VK_CHECK_RESULT(vkCreateSemaphore(device, &semaphoreCreateInfo, nullptr, &semaphores.presentComplete));
+        // Create a semaphore used to synchronize command submission
+        // Ensures that the image is not presented until all commands have been sumbitted and executed
+        VK_CHECK_RESULT(vkCreateSemaphore(device, &semaphoreCreateInfo, nullptr, &semaphores.renderComplete));
+        // Create a semaphore used to synchronize command submission
+        // Ensures that the image is not presented until all commands for the text overlay have been sumbitted and executed
+        // Will be inserted after the render complete semaphore if the text overlay is enabled
+        VK_CHECK_RESULT(vkCreateSemaphore(device, &semaphoreCreateInfo, nullptr, &semaphores.textOverlayComplete));
+    }
+
+#else
+
+
 	// Note :
 	// This example will always use the first physical device reported,
 	// change the vector index if you have multiple Vulkan devices installed
@@ -867,6 +914,9 @@ void VulkanExampleBase::initVulkan(bool enableValidation)
 	// Ensures that the image is not presented until all commands for the text overlay have been sumbitted and executed
 	// Will be inserted after the render complete semaphore if the text overlay is enabled
 	VK_CHECK_RESULT(vkCreateSemaphore(device, &semaphoreCreateInfo, nullptr, &semaphores.textOverlayComplete));
+
+#endif
+
 
 	// Set up submit info structure
 	// Semaphores will stay the same during application lifetime
