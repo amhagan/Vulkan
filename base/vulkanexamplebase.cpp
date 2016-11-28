@@ -98,19 +98,22 @@ void VulkanExampleBase::createCommandBuffers()
 			VK_COMMAND_BUFFER_LEVEL_PRIMARY,
 			static_cast<uint32_t>(drawCmdBuffers.size()));
 
-	VK_CHECK_RESULT(vkAllocateCommandBuffers(device, &cmdBufAllocateInfo, drawCmdBuffers.data()));
+	VK_CHECK_RESULT(vkAllocateCommandBuffers(device[0], &cmdBufAllocateInfo, drawCmdBuffers.data()));
+    VK_CHECK_RESULT(vkAllocateCommandBuffers(device[1], &cmdBufAllocateInfo, drawCmdBuffers.data()));
 }
 
 void VulkanExampleBase::destroyCommandBuffers()
 {
-	vkFreeCommandBuffers(device, cmdPool, static_cast<uint32_t>(drawCmdBuffers.size()), drawCmdBuffers.data());
+	vkFreeCommandBuffers(device[0], cmdPool, static_cast<uint32_t>(drawCmdBuffers.size()), drawCmdBuffers.data());
+    vkFreeCommandBuffers(device[1], cmdPool, static_cast<uint32_t>(drawCmdBuffers.size()), drawCmdBuffers.data());
 }
 
 void VulkanExampleBase::createSetupCommandBuffer()
 {
 	if (setupCmdBuffer != VK_NULL_HANDLE)
 	{
-		vkFreeCommandBuffers(device, cmdPool, 1, &setupCmdBuffer);
+		vkFreeCommandBuffers(device[0], cmdPool, 1, &setupCmdBuffer);
+        vkFreeCommandBuffers(device[1], cmdPool, 1, &setupCmdBuffer);
 		setupCmdBuffer = VK_NULL_HANDLE; // todo : check if still necessary
 	}
 
@@ -120,7 +123,8 @@ void VulkanExampleBase::createSetupCommandBuffer()
 			VK_COMMAND_BUFFER_LEVEL_PRIMARY,
 			1);
 
-	VK_CHECK_RESULT(vkAllocateCommandBuffers(device, &cmdBufAllocateInfo, &setupCmdBuffer));
+	VK_CHECK_RESULT(vkAllocateCommandBuffers(device[0], &cmdBufAllocateInfo, &setupCmdBuffer));
+    VK_CHECK_RESULT(vkAllocateCommandBuffers(device[1], &cmdBufAllocateInfo, &setupCmdBuffer));
 
 	VkCommandBufferBeginInfo cmdBufInfo = {};
 	cmdBufInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
@@ -143,7 +147,8 @@ void VulkanExampleBase::flushSetupCommandBuffer()
 	VK_CHECK_RESULT(vkQueueSubmit(queue, 1, &submitInfo, VK_NULL_HANDLE));
 	VK_CHECK_RESULT(vkQueueWaitIdle(queue));
 
-	vkFreeCommandBuffers(device, cmdPool, 1, &setupCmdBuffer);
+	vkFreeCommandBuffers(device[0], cmdPool, 1, &setupCmdBuffer);
+    vkFreeCommandBuffers(device[1], cmdPool, 1, &setupCmdBuffer);
 	setupCmdBuffer = VK_NULL_HANDLE; 
 }
 
@@ -157,7 +162,8 @@ VkCommandBuffer VulkanExampleBase::createCommandBuffer(VkCommandBufferLevel leve
 			level,
 			1);
 
-	VK_CHECK_RESULT(vkAllocateCommandBuffers(device, &cmdBufAllocateInfo, &cmdBuffer));
+	VK_CHECK_RESULT(vkAllocateCommandBuffers(device[0], &cmdBufAllocateInfo, &cmdBuffer));
+    VK_CHECK_RESULT(vkAllocateCommandBuffers(device[1], &cmdBufAllocateInfo, &cmdBuffer));
 
 	// If requested, also start the new command buffer
 	if (begin)
@@ -188,7 +194,8 @@ void VulkanExampleBase::flushCommandBuffer(VkCommandBuffer commandBuffer, VkQueu
 
 	if (free)
 	{
-		vkFreeCommandBuffers(device, cmdPool, 1, &commandBuffer);
+		vkFreeCommandBuffers(device[0], cmdPool, 1, &commandBuffer);
+        vkFreeCommandBuffers(device[1], cmdPool, 1, &commandBuffer);
 	}
 }
 
@@ -196,15 +203,16 @@ void VulkanExampleBase::createPipelineCache()
 {
 	VkPipelineCacheCreateInfo pipelineCacheCreateInfo = {};
 	pipelineCacheCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_CACHE_CREATE_INFO;
-	VK_CHECK_RESULT(vkCreatePipelineCache(device, &pipelineCacheCreateInfo, nullptr, &pipelineCache));
+	VK_CHECK_RESULT(vkCreatePipelineCache(device[0], &pipelineCacheCreateInfo, nullptr, &pipelineCache));
+    VK_CHECK_RESULT(vkCreatePipelineCache(device[1], &pipelineCacheCreateInfo, nullptr, &pipelineCache));
 }
 
 void VulkanExampleBase::prepare()
 {
-	if (vulkanDevice->enableDebugMarkers)
+	/*if (vulkanDevice->enableDebugMarkers)
 	{
 		vkDebug::DebugMarker::setup(device);
-	}
+	}*/
 	createCommandPool();
 	createSetupCommandBuffer();
 	setupSwapChain();
@@ -217,7 +225,7 @@ void VulkanExampleBase::prepare()
 	// Recreate setup command buffer for derived class
 	createSetupCommandBuffer();
 	// Create a simple texture loader class
-	textureLoader = new vkTools::VulkanTextureLoader(vulkanDevice, queue, cmdPool);
+	textureLoader = new vkTools::VulkanTextureLoader(vulkanDevice[0], queue, cmdPool);
 #if defined(__ANDROID__)
 	textureLoader->assetManager = androidApp->activity->assetManager;
 #endif
@@ -249,7 +257,8 @@ VkPipelineShaderStageCreateInfo VulkanExampleBase::loadShader(std::string fileNa
 #if defined(__ANDROID__)
 	shaderStage.module = vkTools::loadShader(androidApp->activity->assetManager, fileName.c_str(), device, stage);
 #else
-	shaderStage.module = vkTools::loadShader(fileName.c_str(), device, stage);
+	shaderStage.module = vkTools::loadShader(fileName.c_str(), device[0], stage);
+    shaderStage.module = vkTools::loadShader(fileName.c_str(), device[1], stage);
 #endif
 	shaderStage.pName = "main"; // todo : make param
 	assert(shaderStage.module != NULL);
@@ -263,20 +272,26 @@ VkBool32 VulkanExampleBase::createBuffer(VkBufferUsageFlags usageFlags, VkMemory
 	VkMemoryAllocateInfo memAlloc = vkTools::initializers::memoryAllocateInfo();
 	VkBufferCreateInfo bufferCreateInfo = vkTools::initializers::bufferCreateInfo(usageFlags, size);
 
-	VK_CHECK_RESULT(vkCreateBuffer(device, &bufferCreateInfo, nullptr, buffer));
+    int totalDevices[] = { 0, 1 };
+    for (int gpuID : totalDevices)
+    {
+        VK_CHECK_RESULT(vkCreateBuffer(device[gpuID], &bufferCreateInfo, nullptr, buffer));
 
-	vkGetBufferMemoryRequirements(device, *buffer, &memReqs);
-	memAlloc.allocationSize = memReqs.size;
-	memAlloc.memoryTypeIndex = vulkanDevice->getMemoryType(memReqs.memoryTypeBits, memoryPropertyFlags);
-	VK_CHECK_RESULT(vkAllocateMemory(device, &memAlloc, nullptr, memory));
-	if (data != nullptr)
-	{
-		void *mapped;
-		VK_CHECK_RESULT(vkMapMemory(device, *memory, 0, size, 0, &mapped));
-		memcpy(mapped, data, size);
-		vkUnmapMemory(device, *memory);
-	}
-	VK_CHECK_RESULT(vkBindBufferMemory(device, *buffer, *memory, 0));
+        vkGetBufferMemoryRequirements(device[gpuID], *buffer, &memReqs);
+        memAlloc.allocationSize = memReqs.size;
+        memAlloc.memoryTypeIndex = vulkanDevice[gpuID]->getMemoryType(memReqs.memoryTypeBits, memoryPropertyFlags);
+        VK_CHECK_RESULT(vkAllocateMemory(device[gpuID], &memAlloc, nullptr, memory));
+
+        if (data != nullptr)
+        {
+            void *mapped;
+            VK_CHECK_RESULT(vkMapMemory(device[gpuID], *memory, 0, size, 0, &mapped));
+            memcpy(mapped, data, size);
+            vkUnmapMemory(device[gpuID], *memory);
+        }
+
+        VK_CHECK_RESULT(vkBindBufferMemory(device[gpuID], *buffer, *memory, 0));
+    }
 
 	return true;
 }
@@ -329,7 +344,7 @@ void VulkanExampleBase::loadMesh(std::string filename, vkMeshLoader::MeshBuffer 
 
 void VulkanExampleBase::loadMesh(std::string filename, vkMeshLoader::MeshBuffer * meshBuffer, std::vector<vkMeshLoader::VertexLayout> vertexLayout, vkMeshLoader::MeshCreateInfo *meshCreateInfo)
 {
-	VulkanMeshLoader *mesh = new VulkanMeshLoader(vulkanDevice);
+	VulkanMeshLoader *mesh = new VulkanMeshLoader(vulkanDevice[0]);
 
 #if defined(__ANDROID__)
 	mesh->assetManager = androidApp->activity->assetManager;
@@ -348,7 +363,7 @@ void VulkanExampleBase::loadMesh(std::string filename, vkMeshLoader::MeshBuffer 
 		copyCmd,
 		queue);
 
-	vkFreeCommandBuffers(device, cmdPool, 1, &copyCmd);
+	vkFreeCommandBuffers(device[0], cmdPool, 1, &copyCmd);
 
 	meshBuffer->dim = mesh->dim.size;
 
@@ -603,7 +618,8 @@ void VulkanExampleBase::renderLoop()
 	}
 #endif
 	// Flush device to make sure all resources can be freed 
-	vkDeviceWaitIdle(device);
+	vkDeviceWaitIdle(device[0]);
+    vkDeviceWaitIdle(device[1]);
 }
 
 void VulkanExampleBase::updateTextOverlay()
@@ -1678,7 +1694,8 @@ void VulkanExampleBase::setupRenderPass()
 	renderPassInfo.dependencyCount = static_cast<uint32_t>(dependencies.size());
 	renderPassInfo.pDependencies = dependencies.data();
 
-	VK_CHECK_RESULT(vkCreateRenderPass(device, &renderPassInfo, nullptr, &renderPass));
+	VK_CHECK_RESULT(vkCreateRenderPass(device[0], &renderPassInfo, nullptr, &renderPass));
+    VK_CHECK_RESULT(vkCreateRenderPass(device[1], &renderPassInfo, nullptr, &renderPass));
 }
 
 void VulkanExampleBase::windowResize()
@@ -1696,16 +1713,23 @@ void VulkanExampleBase::windowResize()
 	setupSwapChain();
 
 	// Recreate the frame buffers
+    int totalDevices[] = { 0, 1 };
+    for (int gpuID : totalDevices) 
+    {
+        vkDestroyImageView(device[gpuID], depthStencil.view, nullptr);
+        vkDestroyImage(device[gpuID], depthStencil.image, nullptr);
+        vkFreeMemory(device[gpuID], depthStencil.mem, nullptr);
+    }
 
-	vkDestroyImageView(device, depthStencil.view, nullptr);
-	vkDestroyImage(device, depthStencil.image, nullptr);
-	vkFreeMemory(device, depthStencil.mem, nullptr);
 	setupDepthStencil();
 	
-	for (uint32_t i = 0; i < frameBuffers.size(); i++)
-	{
-		vkDestroyFramebuffer(device, frameBuffers[i], nullptr);
-	}
+    for (int gpuID : totalDevices)
+    {
+        for (uint32_t i = 0; i < frameBuffers.size(); i++)
+        {
+            vkDestroyFramebuffer(device[gpuID], frameBuffers[i], nullptr);
+        }
+    }
 	setupFrameBuffer();
 
 	flushSetupCommandBuffer();
@@ -1717,7 +1741,8 @@ void VulkanExampleBase::windowResize()
 	buildCommandBuffers();
 
 	vkQueueWaitIdle(queue);
-	vkDeviceWaitIdle(device);
+	vkDeviceWaitIdle(device[0]);
+    vkDeviceWaitIdle(device[1]);
 
 	if (enableTextOverlay)
 	{

@@ -120,30 +120,33 @@ public:
 
 	~VulkanExample()
 	{
-        
-		// Clean up used Vulkan resources 
-		// Note: Inherited destructor cleans up resources stored in base class
-		vkDestroyPipeline(device, pipeline, nullptr);
+        int totalDevices[] = { 0, 1 };
+        for (int gpuID : totalDevices)
+            {
+		    // Clean up used Vulkan resources 
+		    // Note: Inherited destructor cleans up resources stored in base class
+		    vkDestroyPipeline(device[gpuID], pipeline, nullptr);
 
-		vkDestroyPipelineLayout(device, pipelineLayout, nullptr);
-		vkDestroyDescriptorSetLayout(device, descriptorSetLayout, nullptr);
+		    vkDestroyPipelineLayout(device[gpuID], pipelineLayout, nullptr);
+		    vkDestroyDescriptorSetLayout(device[gpuID], descriptorSetLayout, nullptr);
 
-		vkDestroyBuffer(device, vertices.buffer, nullptr);
-		vkFreeMemory(device, vertices.memory, nullptr);
+		    vkDestroyBuffer(device[gpuID], vertices.buffer, nullptr);
+		    vkFreeMemory(device[gpuID], vertices.memory, nullptr);
 
-		vkDestroyBuffer(device, indices.buffer, nullptr);
-		vkFreeMemory(device, indices.memory, nullptr);
+		    vkDestroyBuffer(device[gpuID], indices.buffer, nullptr);
+		    vkFreeMemory(device[gpuID], indices.memory, nullptr);
 
-		vkDestroyBuffer(device, uniformDataVS.buffer, nullptr);
-		vkFreeMemory(device, uniformDataVS.memory, nullptr);
+		    vkDestroyBuffer(device[gpuID], uniformDataVS.buffer, nullptr);
+		    vkFreeMemory(device[gpuID], uniformDataVS.memory, nullptr);
 
-		vkDestroySemaphore(device, presentCompleteSemaphore, nullptr);
-		vkDestroySemaphore(device, renderCompleteSemaphore, nullptr);
+		    vkDestroySemaphore(device[gpuID], presentCompleteSemaphore, nullptr);
+		    vkDestroySemaphore(device[gpuID], renderCompleteSemaphore, nullptr);
 
-		for (auto& fence : waitFences)
-		{
-			vkDestroyFence(device, fence, nullptr);
-		}
+		    for (auto& fence : waitFences)
+		    {
+			    vkDestroyFence(device[gpuID], fence, nullptr);
+		    }
+        }
 	}
 
 	// This function is used to request a device memory type that supports all the property flags we request (e.g. device local, host visibile)
@@ -172,27 +175,32 @@ public:
 	// Create the Vulkan synchronization primitives used in this example
 	void prepareSynchronizationPrimitives()
 	{
-		// Semaphores (Used for correct command ordering)
-		VkSemaphoreCreateInfo semaphoreCreateInfo = {};
-		semaphoreCreateInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
-		semaphoreCreateInfo.pNext = nullptr;
+        int totalDevices[] = { 0, 1 };
+        for (int gpuID : totalDevices)
+        {
+		    // Semaphores (Used for correct command ordering)
+		    VkSemaphoreCreateInfo semaphoreCreateInfo = {};
+		    semaphoreCreateInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+		    semaphoreCreateInfo.pNext = nullptr;
 
-		// Semaphore used to ensures that image presentation is complete before starting to submit again
-		VK_CHECK_RESULT(vkCreateSemaphore(device, &semaphoreCreateInfo, nullptr, &presentCompleteSemaphore));
+		    // Semaphore used to ensures that image presentation is complete before starting to submit again
+		    VK_CHECK_RESULT(vkCreateSemaphore(device[gpuID], &semaphoreCreateInfo, nullptr, &presentCompleteSemaphore));
 
-		// Semaphore used to ensures that all commands submitted have been finished before submitting the image to the queue
-		VK_CHECK_RESULT(vkCreateSemaphore(device, &semaphoreCreateInfo, nullptr, &renderCompleteSemaphore));
+		    // Semaphore used to ensures that all commands submitted have been finished before submitting the image to the queue
+		    VK_CHECK_RESULT(vkCreateSemaphore(device[gpuID], &semaphoreCreateInfo, nullptr, &renderCompleteSemaphore));
 
-		// Fences (Used to check draw command buffer completion)
-		VkFenceCreateInfo fenceCreateInfo = {};
-		fenceCreateInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
-		// Create in signaled state so we don't wait on first render of each command buffer
-		fenceCreateInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
-		waitFences.resize(drawCmdBuffers.size());
-		for (auto& fence : waitFences)
-		{
-			VK_CHECK_RESULT(vkCreateFence(device, &fenceCreateInfo, nullptr, &fence));
-		}
+		    // Fences (Used to check draw command buffer completion)
+		    VkFenceCreateInfo fenceCreateInfo = {};
+		    fenceCreateInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+		    // Create in signaled state so we don't wait on first render of each command buffer
+		    fenceCreateInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
+		    waitFences.resize(drawCmdBuffers.size());
+		    for (auto& fence : waitFences)
+		    {
+			    VK_CHECK_RESULT(vkCreateFence(device[gpuID], &fenceCreateInfo, nullptr, &fence));
+		    }
+           
+        }
 	}
 
 	// Get a new command buffer from the command pool
@@ -242,25 +250,29 @@ public:
 
 		VK_CHECK_RESULT(vkEndCommandBuffer(commandBuffer));
 
-		VkSubmitInfo submitInfo = {};
-		submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-		submitInfo.commandBufferCount = 1;
-		submitInfo.pCommandBuffers = &commandBuffer;
+        int totalDevices[] = { 0, 1 };
+        for (int gpuID : totalDevices)
+        {
+		    VkSubmitInfo submitInfo = {};
+		    submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+		    submitInfo.commandBufferCount = 1;
+		    submitInfo.pCommandBuffers = &commandBuffer;
 
-		// Create fence to ensure that the command buffer has finished executing
-		VkFenceCreateInfo fenceCreateInfo = {};
-		fenceCreateInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
-		fenceCreateInfo.flags = 0;
-		VkFence fence;
-		VK_CHECK_RESULT(vkCreateFence(device, &fenceCreateInfo, nullptr, &fence));
+		    // Create fence to ensure that the command buffer has finished executing
+		    VkFenceCreateInfo fenceCreateInfo = {};
+		    fenceCreateInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+		    fenceCreateInfo.flags = 0;
+		    VkFence fence;
+		    VK_CHECK_RESULT(vkCreateFence(device[gpuID], &fenceCreateInfo, nullptr, &fence));
 
-		// Submit to the queue
-		VK_CHECK_RESULT(vkQueueSubmit(queue, 1, &submitInfo, fence));
-		// Wait for the fence to signal that command buffer has finished executing
-		VK_CHECK_RESULT(vkWaitForFences(device, 1, &fence, VK_TRUE, DEFAULT_FENCE_TIMEOUT));
+		    // Submit to the queue
+		    VK_CHECK_RESULT(vkQueueSubmit(queue, 1, &submitInfo, fence));
+		    // Wait for the fence to signal that command buffer has finished executing
+		    VK_CHECK_RESULT(vkWaitForFences(device[gpuID], 1, &fence, VK_TRUE, DEFAULT_FENCE_TIMEOUT));
 
-		vkDestroyFence(device, fence, nullptr);
-		vkFreeCommandBuffers(device, cmdPool, 1, &commandBuffer);
+		    vkDestroyFence(device[gpuID], fence, nullptr);
+		    vkFreeCommandBuffers(device[gpuID], cmdPool, 1, &commandBuffer);
+        }
 	}
 
 	// Build separate command buffers for every framebuffer image
@@ -347,9 +359,16 @@ public:
 		// Get next image in the swap chain (back/front buffer)
 		VK_CHECK_RESULT(swapChain.acquireNextImage(presentCompleteSemaphore, &currentBuffer));
 
-		// Use a fence to wait until the command buffer has finished execution before using it again
-		VK_CHECK_RESULT(vkWaitForFences(device, 1, &waitFences[currentBuffer], VK_TRUE, UINT64_MAX));
-		VK_CHECK_RESULT(vkResetFences(device, 1, &waitFences[currentBuffer]));
+        int totalDevices[] = { 0, 1 };
+        for (int gpuID : totalDevices)
+        {
+		    // Use a fence to wait until the command buffer has finished execution before using it again
+		    VK_CHECK_RESULT(vkWaitForFences(device[0], 1, &waitFences[currentBuffer], VK_TRUE, UINT64_MAX));
+		    VK_CHECK_RESULT(vkResetFences(device[0], 1, &waitFences[currentBuffer]));
+
+            VK_CHECK_RESULT(vkWaitForFences(device[1], 1, &waitFences[currentBuffer], VK_TRUE, UINT64_MAX));
+            VK_CHECK_RESULT(vkResetFences(device[1], 1, &waitFences[currentBuffer]));
+        }
 
 		// Pipeline stage at which the queue submission will wait (via pWaitSemaphores)
 		VkPipelineStageFlags waitStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
@@ -436,81 +455,87 @@ public:
 			vertexBufferInfo.size = vertexBufferSize;
 			// Buffer is used as the copy source
 			vertexBufferInfo.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
-			// Create a host-visible buffer to copy the vertex data to (staging buffer)
-			VK_CHECK_RESULT(vkCreateBuffer(device, &vertexBufferInfo, nullptr, &stagingBuffers.vertices.buffer));
-			vkGetBufferMemoryRequirements(device, stagingBuffers.vertices.buffer, &memReqs);
-			memAlloc.allocationSize = memReqs.size;
-			// Request a host visible memory type that can be used to copy our data do
-			// Also request it to be coherent, so that writes are visible to the GPU right after unmapping the buffer
-			memAlloc.memoryTypeIndex = getMemoryTypeIndex(memReqs.memoryTypeBits, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
-			VK_CHECK_RESULT(vkAllocateMemory(device, &memAlloc, nullptr, &stagingBuffers.vertices.memory));
-			// Map and copy
-			VK_CHECK_RESULT(vkMapMemory(device, stagingBuffers.vertices.memory, 0, memAlloc.allocationSize, 0, &data));
-			memcpy(data, vertexBuffer.data(), vertexBufferSize);
-			vkUnmapMemory(device, stagingBuffers.vertices.memory);
-			VK_CHECK_RESULT(vkBindBufferMemory(device, stagingBuffers.vertices.buffer, stagingBuffers.vertices.memory, 0));
 
-			// Create a device local buffer to which the (host local) vertex data will be copied and which will be used for rendering
-			vertexBufferInfo.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
-			VK_CHECK_RESULT(vkCreateBuffer(device, &vertexBufferInfo, nullptr, &vertices.buffer));
-			vkGetBufferMemoryRequirements(device, vertices.buffer, &memReqs);
-			memAlloc.allocationSize = memReqs.size;
-			memAlloc.memoryTypeIndex = getMemoryTypeIndex(memReqs.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-			VK_CHECK_RESULT(vkAllocateMemory(device, &memAlloc, nullptr, &vertices.memory));
-			VK_CHECK_RESULT(vkBindBufferMemory(device, vertices.buffer, vertices.memory, 0));
+            int totalDevices[] = { 0, 1 };
+            for (int gpuID : totalDevices)
+            {
+			    // Create a host-visible buffer to copy the vertex data to (staging buffer)
+			    VK_CHECK_RESULT(vkCreateBuffer(device[gpuID], &vertexBufferInfo, nullptr, &stagingBuffers.vertices.buffer));
+			    vkGetBufferMemoryRequirements(device[gpuID], stagingBuffers.vertices.buffer, &memReqs);
+			    memAlloc.allocationSize = memReqs.size;
+			    // Request a host visible memory type that can be used to copy our data do
+			    // Also request it to be coherent, so that writes are visible to the GPU right after unmapping the buffer
+			    memAlloc.memoryTypeIndex = getMemoryTypeIndex(memReqs.memoryTypeBits, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+			    VK_CHECK_RESULT(vkAllocateMemory(device[gpuID], &memAlloc, nullptr, &stagingBuffers.vertices.memory));
+			    // Map and copy
+			    VK_CHECK_RESULT(vkMapMemory(device[gpuID], stagingBuffers.vertices.memory, 0, memAlloc.allocationSize, 0, &data));
+			    memcpy(data, vertexBuffer.data(), vertexBufferSize);
+			    vkUnmapMemory(device[gpuID], stagingBuffers.vertices.memory);
+			    VK_CHECK_RESULT(vkBindBufferMemory(device[gpuID], stagingBuffers.vertices.buffer, stagingBuffers.vertices.memory, 0));
 
-			// Index buffer
-			VkBufferCreateInfo indexbufferInfo = {};
-			indexbufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-			indexbufferInfo.size = indexBufferSize;
-			indexbufferInfo.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
-			// Copy index data to a buffer visible to the host (staging buffer)
-			VK_CHECK_RESULT(vkCreateBuffer(device, &indexbufferInfo, nullptr, &stagingBuffers.indices.buffer));
-			vkGetBufferMemoryRequirements(device, stagingBuffers.indices.buffer, &memReqs);
-			memAlloc.allocationSize = memReqs.size;
-			memAlloc.memoryTypeIndex = getMemoryTypeIndex(memReqs.memoryTypeBits, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
-			VK_CHECK_RESULT(vkAllocateMemory(device, &memAlloc, nullptr, &stagingBuffers.indices.memory));
-			VK_CHECK_RESULT(vkMapMemory(device, stagingBuffers.indices.memory, 0, indexBufferSize, 0, &data));
-			memcpy(data, indexBuffer.data(), indexBufferSize);
-			vkUnmapMemory(device, stagingBuffers.indices.memory);
-			VK_CHECK_RESULT(vkBindBufferMemory(device, stagingBuffers.indices.buffer, stagingBuffers.indices.memory, 0));
+			    // Create a device local buffer to which the (host local) vertex data will be copied and which will be used for rendering
+			    vertexBufferInfo.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+			    VK_CHECK_RESULT(vkCreateBuffer(device[gpuID], &vertexBufferInfo, nullptr, &vertices.buffer));
+			    vkGetBufferMemoryRequirements(device[gpuID], vertices.buffer, &memReqs);
+			    memAlloc.allocationSize = memReqs.size;
+			    memAlloc.memoryTypeIndex = getMemoryTypeIndex(memReqs.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+			    VK_CHECK_RESULT(vkAllocateMemory(device[gpuID], &memAlloc, nullptr, &vertices.memory));
+			    VK_CHECK_RESULT(vkBindBufferMemory(device[gpuID], vertices.buffer, vertices.memory, 0));
 
-			// Create destination buffer with device only visibility
-			indexbufferInfo.usage = VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
-			VK_CHECK_RESULT(vkCreateBuffer(device, &indexbufferInfo, nullptr, &indices.buffer));
-			vkGetBufferMemoryRequirements(device, indices.buffer, &memReqs);
-			memAlloc.allocationSize = memReqs.size;
-			memAlloc.memoryTypeIndex = getMemoryTypeIndex(memReqs.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-			VK_CHECK_RESULT(vkAllocateMemory(device, &memAlloc, nullptr, &indices.memory));
-			VK_CHECK_RESULT(vkBindBufferMemory(device, indices.buffer, indices.memory, 0));
+			    // Index buffer
+			    VkBufferCreateInfo indexbufferInfo = {};
+			    indexbufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+			    indexbufferInfo.size = indexBufferSize;
+			    indexbufferInfo.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
 
-			VkCommandBufferBeginInfo cmdBufferBeginInfo = {};
-			cmdBufferBeginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-			cmdBufferBeginInfo.pNext = nullptr;
+			    // Copy index data to a buffer visible to the host (staging buffer)
+			    VK_CHECK_RESULT(vkCreateBuffer(device[gpuID], &indexbufferInfo, nullptr, &stagingBuffers.indices.buffer));
+			    vkGetBufferMemoryRequirements(device[gpuID], stagingBuffers.indices.buffer, &memReqs);
+			    memAlloc.allocationSize = memReqs.size;
+			    memAlloc.memoryTypeIndex = getMemoryTypeIndex(memReqs.memoryTypeBits, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+			    VK_CHECK_RESULT(vkAllocateMemory(device[gpuID], &memAlloc, nullptr, &stagingBuffers.indices.memory));
+			    VK_CHECK_RESULT(vkMapMemory(device[gpuID], stagingBuffers.indices.memory, 0, indexBufferSize, 0, &data));
+			    memcpy(data, indexBuffer.data(), indexBufferSize);
+			    vkUnmapMemory(device[gpuID], stagingBuffers.indices.memory);
+			    VK_CHECK_RESULT(vkBindBufferMemory(device[gpuID], stagingBuffers.indices.buffer, stagingBuffers.indices.memory, 0));
 
-			// Buffer copies have to be submitted to a queue, so we need a command buffer for them
-			// Note: Some devices offer a dedicated transfer queue (with only the transfer bit set) that may be faster when doing lots of copies
-			VkCommandBuffer copyCmd = getCommandBuffer(true);
+			    // Create destination buffer with device only visibility
+			    indexbufferInfo.usage = VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+			    VK_CHECK_RESULT(vkCreateBuffer(device[gpuID], &indexbufferInfo, nullptr, &indices.buffer));
+			    vkGetBufferMemoryRequirements(device[gpuID], indices.buffer, &memReqs);
+			    memAlloc.allocationSize = memReqs.size;
+			    memAlloc.memoryTypeIndex = getMemoryTypeIndex(memReqs.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+			    VK_CHECK_RESULT(vkAllocateMemory(device[gpuID], &memAlloc, nullptr, &indices.memory));
+			    VK_CHECK_RESULT(vkBindBufferMemory(device[gpuID], indices.buffer, indices.memory, 0));
 
-			// Put buffer region copies into command buffer
-			VkBufferCopy copyRegion = {};
+			    VkCommandBufferBeginInfo cmdBufferBeginInfo = {};
+			    cmdBufferBeginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+			    cmdBufferBeginInfo.pNext = nullptr;
 
-			// Vertex buffer
-			copyRegion.size = vertexBufferSize;
-			vkCmdCopyBuffer(copyCmd, stagingBuffers.vertices.buffer, vertices.buffer, 1, &copyRegion);
-			// Index buffer
-			copyRegion.size = indexBufferSize;
-			vkCmdCopyBuffer(copyCmd, stagingBuffers.indices.buffer, indices.buffer,	1, &copyRegion);
+			    // Buffer copies have to be submitted to a queue, so we need a command buffer for them
+			    // Note: Some devices offer a dedicated transfer queue (with only the transfer bit set) that may be faster when doing lots of copies
+			    VkCommandBuffer copyCmd = getCommandBuffer(true);
 
-			// Flushing the command buffer will also submit it to the queue and uses a fence to ensure that all commands have been executed before returning
-			flushCommandBuffer(copyCmd);
+			    // Put buffer region copies into command buffer
+			    VkBufferCopy copyRegion = {};
 
-			// Destroy staging buffers
-			// Note: Staging buffer must not be deleted before the copies have been submitted and executed
-			vkDestroyBuffer(device, stagingBuffers.vertices.buffer, nullptr);
-			vkFreeMemory(device, stagingBuffers.vertices.memory, nullptr);
-			vkDestroyBuffer(device, stagingBuffers.indices.buffer, nullptr);
-			vkFreeMemory(device, stagingBuffers.indices.memory, nullptr);
+			    // Vertex buffer
+			    copyRegion.size = vertexBufferSize;
+			    vkCmdCopyBuffer(copyCmd, stagingBuffers.vertices.buffer, vertices.buffer, 1, &copyRegion);
+			    // Index buffer
+			    copyRegion.size = indexBufferSize;
+			    vkCmdCopyBuffer(copyCmd, stagingBuffers.indices.buffer, indices.buffer,	1, &copyRegion);
+
+			    // Flushing the command buffer will also submit it to the queue and uses a fence to ensure that all commands have been executed before returning
+			    flushCommandBuffer(copyCmd);
+
+			    // Destroy staging buffers
+			    // Note: Staging buffer must not be deleted before the copies have been submitted and executed
+			    vkDestroyBuffer(device[gpuID], stagingBuffers.vertices.buffer, nullptr);
+			    vkFreeMemory(device[gpuID], stagingBuffers.vertices.memory, nullptr);
+			    vkDestroyBuffer(device[gpuID], stagingBuffers.indices.buffer, nullptr);
+			    vkFreeMemory(device[gpuID], stagingBuffers.indices.memory, nullptr);
+            }
 		}
 		else
 		{
@@ -523,33 +548,37 @@ public:
 			vertexBufferInfo.size = vertexBufferSize;
 			vertexBufferInfo.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
 
-			// Copy vertex data to a buffer visible to the host
-			VK_CHECK_RESULT(vkCreateBuffer(device, &vertexBufferInfo, nullptr, &vertices.buffer));
-			vkGetBufferMemoryRequirements(device, vertices.buffer, &memReqs);
-			memAlloc.allocationSize = memReqs.size;
-			memAlloc.memoryTypeIndex = getMemoryTypeIndex(memReqs.memoryTypeBits, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
-			VK_CHECK_RESULT(vkAllocateMemory(device, &memAlloc, nullptr, &vertices.memory));
-			VK_CHECK_RESULT(vkMapMemory(device, vertices.memory, 0, memAlloc.allocationSize, 0, &data));
-			memcpy(data, vertexBuffer.data(), vertexBufferSize);
-			vkUnmapMemory(device, vertices.memory);
-			VK_CHECK_RESULT(vkBindBufferMemory(device, vertices.buffer, vertices.memory, 0));
+            int totalDevices[] = { 0, 1 };
+            for (int gpuID : totalDevices)
+            {
+			    // Copy vertex data to a buffer visible to the host
+			    VK_CHECK_RESULT(vkCreateBuffer(device[gpuID], &vertexBufferInfo, nullptr, &vertices.buffer));
+			    vkGetBufferMemoryRequirements(device[gpuID], vertices.buffer, &memReqs);
+			    memAlloc.allocationSize = memReqs.size;
+			    memAlloc.memoryTypeIndex = getMemoryTypeIndex(memReqs.memoryTypeBits, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
+			    VK_CHECK_RESULT(vkAllocateMemory(device[gpuID], &memAlloc, nullptr, &vertices.memory));
+			    VK_CHECK_RESULT(vkMapMemory(device[gpuID], vertices.memory, 0, memAlloc.allocationSize, 0, &data));
+			    memcpy(data, vertexBuffer.data(), vertexBufferSize);
+			    vkUnmapMemory(device[gpuID], vertices.memory);
+			    VK_CHECK_RESULT(vkBindBufferMemory(device[gpuID], vertices.buffer, vertices.memory, 0));
 
-			// Index buffer
-			VkBufferCreateInfo indexbufferInfo = {};
-			indexbufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-			indexbufferInfo.size = indexBufferSize;
-			indexbufferInfo.usage = VK_BUFFER_USAGE_INDEX_BUFFER_BIT;
+			    // Index buffer
+			    VkBufferCreateInfo indexbufferInfo = {};
+			    indexbufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+			    indexbufferInfo.size = indexBufferSize;
+			    indexbufferInfo.usage = VK_BUFFER_USAGE_INDEX_BUFFER_BIT;
 
-			// Copy index data to a buffer visible to the host
-			VK_CHECK_RESULT(vkCreateBuffer(device, &indexbufferInfo, nullptr, &indices.buffer));
-			vkGetBufferMemoryRequirements(device, indices.buffer, &memReqs);
-			memAlloc.allocationSize = memReqs.size;
-			memAlloc.memoryTypeIndex = getMemoryTypeIndex(memReqs.memoryTypeBits, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
-			VK_CHECK_RESULT(vkAllocateMemory(device, &memAlloc, nullptr, &indices.memory));
-			VK_CHECK_RESULT(vkMapMemory(device, indices.memory, 0, indexBufferSize, 0, &data));
-			memcpy(data, indexBuffer.data(), indexBufferSize);
-			vkUnmapMemory(device, indices.memory);
-			VK_CHECK_RESULT(vkBindBufferMemory(device, indices.buffer, indices.memory, 0));
+			    // Copy index data to a buffer visible to the host
+			    VK_CHECK_RESULT(vkCreateBuffer(device[gpuID], &indexbufferInfo, nullptr, &indices.buffer));
+			    vkGetBufferMemoryRequirements(device[gpuID], indices.buffer, &memReqs);
+			    memAlloc.allocationSize = memReqs.size;
+			    memAlloc.memoryTypeIndex = getMemoryTypeIndex(memReqs.memoryTypeBits, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
+			    VK_CHECK_RESULT(vkAllocateMemory(device[gpuID], &memAlloc, nullptr, &indices.memory));
+			    VK_CHECK_RESULT(vkMapMemory(device[gpuID], indices.memory, 0, indexBufferSize, 0, &data));
+			    memcpy(data, indexBuffer.data(), indexBufferSize);
+			    vkUnmapMemory(device[gpuID], indices.memory);
+			    VK_CHECK_RESULT(vkBindBufferMemory(device[gpuID], indices.buffer, indices.memory, 0));
+            }
 		}
 
 		// Vertex input binding
@@ -605,7 +634,8 @@ public:
 		// Set the max. number of descriptor sets that can be requested from this pool (requesting beyond this limit will result in an error)
 		descriptorPoolInfo.maxSets = 1;
 
-		VK_CHECK_RESULT(vkCreateDescriptorPool(device, &descriptorPoolInfo, nullptr, &descriptorPool));
+		VK_CHECK_RESULT(vkCreateDescriptorPool(device[0], &descriptorPoolInfo, nullptr, &descriptorPool));
+        VK_CHECK_RESULT(vkCreateDescriptorPool(device[1], &descriptorPoolInfo, nullptr, &descriptorPool));
 	}
 
 	void setupDescriptorSetLayout()
@@ -627,17 +657,22 @@ public:
 		descriptorLayout.bindingCount = 1;
 		descriptorLayout.pBindings = &layoutBinding;
 
-		VK_CHECK_RESULT(vkCreateDescriptorSetLayout(device, &descriptorLayout, nullptr, &descriptorSetLayout));
 
-		// Create the pipeline layout that is used to generate the rendering pipelines that are based on this descriptor set layout
-		// In a more complex scenario you would have different pipeline layouts for different descriptor set layouts that could be reused
-		VkPipelineLayoutCreateInfo pPipelineLayoutCreateInfo = {};
-		pPipelineLayoutCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-		pPipelineLayoutCreateInfo.pNext = nullptr;
-		pPipelineLayoutCreateInfo.setLayoutCount = 1;
-		pPipelineLayoutCreateInfo.pSetLayouts = &descriptorSetLayout;
+        int totalDevices[] = { 0, 1 };
+        for (int gpuID : totalDevices)
+        {
+		    VK_CHECK_RESULT(vkCreateDescriptorSetLayout(device[gpuID], &descriptorLayout, nullptr, &descriptorSetLayout));
 
-		VK_CHECK_RESULT(vkCreatePipelineLayout(device, &pPipelineLayoutCreateInfo, nullptr, &pipelineLayout));
+		    // Create the pipeline layout that is used to generate the rendering pipelines that are based on this descriptor set layout
+		    // In a more complex scenario you would have different pipeline layouts for different descriptor set layouts that could be reused
+		    VkPipelineLayoutCreateInfo pPipelineLayoutCreateInfo = {};
+		    pPipelineLayoutCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+		    pPipelineLayoutCreateInfo.pNext = nullptr;
+		    pPipelineLayoutCreateInfo.setLayoutCount = 1;
+		    pPipelineLayoutCreateInfo.pSetLayouts = &descriptorSetLayout;
+
+		    VK_CHECK_RESULT(vkCreatePipelineLayout(device[gpuID], &pPipelineLayoutCreateInfo, nullptr, &pipelineLayout));
+        }
 	}
 
 	void setupDescriptorSet()
@@ -649,70 +684,78 @@ public:
 		allocInfo.descriptorSetCount = 1;
 		allocInfo.pSetLayouts = &descriptorSetLayout;
 
-		VK_CHECK_RESULT(vkAllocateDescriptorSets(device, &allocInfo, &descriptorSet));
+        int totalDevices[] = { 0, 1 };
+        for (int gpuID : totalDevices)
+        {
+		    VK_CHECK_RESULT(vkAllocateDescriptorSets(device[gpuID], &allocInfo, &descriptorSet));
 
-		// Update the descriptor set determining the shader binding points
-		// For every binding point used in a shader there needs to be one
-		// descriptor set matching that binding point
+		    // Update the descriptor set determining the shader binding points
+		    // For every binding point used in a shader there needs to be one
+		    // descriptor set matching that binding point
 
-		VkWriteDescriptorSet writeDescriptorSet = {};
+		    VkWriteDescriptorSet writeDescriptorSet = {};
 
-		// Binding 0 : Uniform buffer
-		writeDescriptorSet.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-		writeDescriptorSet.dstSet = descriptorSet;
-		writeDescriptorSet.descriptorCount = 1;
-		writeDescriptorSet.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-		writeDescriptorSet.pBufferInfo = &uniformDataVS.descriptor;
-		// Binds this uniform buffer to binding point 0
-		writeDescriptorSet.dstBinding = 0;
+		    // Binding 0 : Uniform buffer
+		    writeDescriptorSet.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+		    writeDescriptorSet.dstSet = descriptorSet;
+		    writeDescriptorSet.descriptorCount = 1;
+		    writeDescriptorSet.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+		    writeDescriptorSet.pBufferInfo = &uniformDataVS.descriptor;
+		    // Binds this uniform buffer to binding point 0
+		    writeDescriptorSet.dstBinding = 0;
 
-		vkUpdateDescriptorSets(device, 1, &writeDescriptorSet, 0, nullptr);
+		    vkUpdateDescriptorSets(device[gpuID], 1, &writeDescriptorSet, 0, nullptr);
+        }
 	}
 
 	// Create the depth (and stencil) buffer attachments used by our framebuffers
 	// Note: Override of virtual function in the base class and called from within VulkanExampleBase::prepare
 	void setupDepthStencil()
 	{
-		// Create an optimal image used as the depth stencil attachment
-		VkImageCreateInfo image = {};
-		image.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
-		image.imageType = VK_IMAGE_TYPE_2D;
-		image.format = depthFormat;
-		// Use example's height and width
-		image.extent = { width, height, 1 };
-		image.mipLevels = 1;
-		image.arrayLayers = 1;
-		image.samples = VK_SAMPLE_COUNT_1_BIT;
-		image.tiling = VK_IMAGE_TILING_OPTIMAL;
-		image.usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
-		image.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-		VK_CHECK_RESULT(vkCreateImage(device, &image, nullptr, &depthStencil.image));
+        int totalDevices[] = { 0, 1 };
+        for (int gpuID : totalDevices)
+        {
+		    // Create an optimal image used as the depth stencil attachment
+		    VkImageCreateInfo image = {};
+		    image.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+		    image.imageType = VK_IMAGE_TYPE_2D;
+		    image.format = depthFormat;
+		    // Use example's height and width
+		    image.extent = { width, height, 1 };
+		    image.mipLevels = 1;
+		    image.arrayLayers = 1;
+		    image.samples = VK_SAMPLE_COUNT_1_BIT;
+		    image.tiling = VK_IMAGE_TILING_OPTIMAL;
+		    image.usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+		    image.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+		    VK_CHECK_RESULT(vkCreateImage(device[gpuID], &image, nullptr, &depthStencil.image));
 
-		// Allocate memory for the image (device local) and bind it to our image
-		VkMemoryAllocateInfo memAlloc = {};
-		memAlloc.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-		VkMemoryRequirements memReqs;
-		vkGetImageMemoryRequirements(device, depthStencil.image, &memReqs);
-		memAlloc.allocationSize = memReqs.size;
-		memAlloc.memoryTypeIndex = getMemoryTypeIndex(memReqs.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-		VK_CHECK_RESULT(vkAllocateMemory(device, &memAlloc, nullptr, &depthStencil.mem));
-		VK_CHECK_RESULT(vkBindImageMemory(device, depthStencil.image, depthStencil.mem, 0));
+		    // Allocate memory for the image (device local) and bind it to our image
+		    VkMemoryAllocateInfo memAlloc = {};
+		    memAlloc.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+		    VkMemoryRequirements memReqs;
+		    vkGetImageMemoryRequirements(device[gpuID], depthStencil.image, &memReqs);
+		    memAlloc.allocationSize = memReqs.size;
+		    memAlloc.memoryTypeIndex = getMemoryTypeIndex(memReqs.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+		    VK_CHECK_RESULT(vkAllocateMemory(device[gpuID], &memAlloc, nullptr, &depthStencil.mem));
+		    VK_CHECK_RESULT(vkBindImageMemory(device[gpuID], depthStencil.image, depthStencil.mem, 0));
 
-		// Create a view for the depth stencil image
-		// Images aren't directly accessed in Vulkan, but rather through views described by a subresource range
-		// This allows for multiple views of one image with differing ranges (e.g. for different layers)
-		VkImageViewCreateInfo depthStencilView = {};
-		depthStencilView.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-		depthStencilView.viewType = VK_IMAGE_VIEW_TYPE_2D;
-		depthStencilView.format = depthFormat;
-		depthStencilView.subresourceRange = {};
-		depthStencilView.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT;
-		depthStencilView.subresourceRange.baseMipLevel = 0;
-		depthStencilView.subresourceRange.levelCount = 1;
-		depthStencilView.subresourceRange.baseArrayLayer = 0;
-		depthStencilView.subresourceRange.layerCount = 1;
-		depthStencilView.image = depthStencil.image;
-		VK_CHECK_RESULT(vkCreateImageView(device, &depthStencilView, nullptr, &depthStencil.view));
+		    // Create a view for the depth stencil image
+		    // Images aren't directly accessed in Vulkan, but rather through views described by a subresource range
+		    // This allows for multiple views of one image with differing ranges (e.g. for different layers)
+		    VkImageViewCreateInfo depthStencilView = {};
+		    depthStencilView.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+		    depthStencilView.viewType = VK_IMAGE_VIEW_TYPE_2D;
+		    depthStencilView.format = depthFormat;
+		    depthStencilView.subresourceRange = {};
+		    depthStencilView.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT;
+		    depthStencilView.subresourceRange.baseMipLevel = 0;
+		    depthStencilView.subresourceRange.levelCount = 1;
+		    depthStencilView.subresourceRange.baseArrayLayer = 0;
+		    depthStencilView.subresourceRange.layerCount = 1;
+		    depthStencilView.image = depthStencil.image;
+		    VK_CHECK_RESULT(vkCreateImageView(device[gpuID], &depthStencilView, nullptr, &depthStencil.view));
+        }   
 	}
 
 	// Create a frame buffer for each swap chain image
@@ -737,7 +780,8 @@ public:
 			frameBufferCreateInfo.height = height;
 			frameBufferCreateInfo.layers = 1;
 			// Create the framebuffer
-			VK_CHECK_RESULT(vkCreateFramebuffer(device, &frameBufferCreateInfo, nullptr, &frameBuffers[i]));
+			VK_CHECK_RESULT(vkCreateFramebuffer(device[0], &frameBufferCreateInfo, nullptr, &frameBuffers[i]));
+            VK_CHECK_RESULT(vkCreateFramebuffer(device[1], &frameBufferCreateInfo, nullptr, &frameBuffers[i]));
 		}
 	}
 
@@ -832,7 +876,8 @@ public:
 		renderPassInfo.dependencyCount = static_cast<uint32_t>(dependencies.size());	// Number of subpass dependencies
 		renderPassInfo.pDependencies = dependencies.data();								// Subpass dependencies used by the render pass
 
-		VK_CHECK_RESULT(vkCreateRenderPass(device, &renderPassInfo, nullptr, &renderPass));
+		VK_CHECK_RESULT(vkCreateRenderPass(device[0], &renderPassInfo, nullptr, &renderPass));
+        VK_CHECK_RESULT(vkCreateRenderPass(device[1], &renderPassInfo, nullptr, &renderPass));
 	}
 
 	void preparePipelines()
@@ -939,7 +984,8 @@ public:
 		pipelineCreateInfo.pDynamicState = &dynamicState;
 
 		// Create rendering pipeline using the specified states
-		VK_CHECK_RESULT(vkCreateGraphicsPipelines(device, pipelineCache, 1, &pipelineCreateInfo, nullptr, &pipeline));
+		VK_CHECK_RESULT(vkCreateGraphicsPipelines(device[0], pipelineCache, 1, &pipelineCreateInfo, nullptr, &pipeline));
+        VK_CHECK_RESULT(vkCreateGraphicsPipelines(device[1], pipelineCache, 1, &pipelineCreateInfo, nullptr, &pipeline));
 	}
 
 	void prepareUniformBuffers()
@@ -962,26 +1008,31 @@ public:
 		bufferInfo.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
 
 		// Create a new buffer
-		VK_CHECK_RESULT(vkCreateBuffer(device, &bufferInfo, nullptr, &uniformDataVS.buffer));
-		// Get memory requirements including size, alignment and memory type 
-		vkGetBufferMemoryRequirements(device, uniformDataVS.buffer, &memReqs);
-		allocInfo.allocationSize = memReqs.size;
-		// Get the memory type index that supports host visibile memory access
-		// Most implementations offer multiple memory types and selecting the correct one to allocate memory from is crucial
-		// We also want the buffer to be host coherent so we don't have to flush (or sync after every update.
-		// Note: This may affect performance so you might not want to do this in a real world application that updates buffers on a regular base
-		allocInfo.memoryTypeIndex = getMemoryTypeIndex(memReqs.memoryTypeBits, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
-		// Allocate memory for the uniform buffer
-		VK_CHECK_RESULT(vkAllocateMemory(device, &allocInfo, nullptr, &(uniformDataVS.memory)));
-		// Bind memory to buffer
-		VK_CHECK_RESULT(vkBindBufferMemory(device, uniformDataVS.buffer, uniformDataVS.memory, 0));
+        int totalDevices[] = { 0, 1 };
+        for (int gpuID : totalDevices)
+        {
+		    VK_CHECK_RESULT(vkCreateBuffer(device[gpuID], &bufferInfo, nullptr, &uniformDataVS.buffer));
+		    // Get memory requirements including size, alignment and memory type 
+		    vkGetBufferMemoryRequirements(device[gpuID], uniformDataVS.buffer, &memReqs);
+		    allocInfo.allocationSize = memReqs.size;
+		    // Get the memory type index that supports host visibile memory access
+		    // Most implementations offer multiple memory types and selecting the correct one to allocate memory from is crucial
+		    // We also want the buffer to be host coherent so we don't have to flush (or sync after every update.
+		    // Note: This may affect performance so you might not want to do this in a real world application that updates buffers on a regular base
+		    allocInfo.memoryTypeIndex = getMemoryTypeIndex(memReqs.memoryTypeBits, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+		    // Allocate memory for the uniform buffer
+		    VK_CHECK_RESULT(vkAllocateMemory(device[gpuID], &allocInfo, nullptr, &(uniformDataVS.memory)));
+		    // Bind memory to buffer
+		    VK_CHECK_RESULT(vkBindBufferMemory(device[gpuID], uniformDataVS.buffer, uniformDataVS.memory, 0));
+        
 		
-		// Store information in the uniform's descriptor that is used by the descriptor set
-		uniformDataVS.descriptor.buffer = uniformDataVS.buffer;
-		uniformDataVS.descriptor.offset = 0;
-		uniformDataVS.descriptor.range = sizeof(uboVS);
+		    // Store information in the uniform's descriptor that is used by the descriptor set
+		    uniformDataVS.descriptor.buffer = uniformDataVS.buffer;
+		    uniformDataVS.descriptor.offset = 0;
+		    uniformDataVS.descriptor.range = sizeof(uboVS);
 
-		updateUniformBuffers();
+		    updateUniformBuffers();
+        }
 	}
 
 	void updateUniformBuffers()
@@ -997,12 +1048,16 @@ public:
 		uboVS.modelMatrix = glm::rotate(uboVS.modelMatrix, glm::radians(rotation.z), glm::vec3(0.0f, 0.0f, 1.0f));
 
 		// Map uniform buffer and update it
-		uint8_t *pData;
-		VK_CHECK_RESULT(vkMapMemory(device, uniformDataVS.memory, 0, sizeof(uboVS), 0, (void **)&pData));
-		memcpy(pData, &uboVS, sizeof(uboVS));
-		// Unmap after data has been copied
-		// Note: Since we requested a host coherent memory type for the uniform buffer, the write is instantly visible to the GPU
-		vkUnmapMemory(device, uniformDataVS.memory);
+        int totalDevices[] = { 0, 1 };
+        for (int gpuID : totalDevices)
+        {
+		    uint8_t *pData;
+		    VK_CHECK_RESULT(vkMapMemory(device[gpuID], uniformDataVS.memory, 0, sizeof(uboVS), 0, (void **)&pData));
+		    memcpy(pData, &uboVS, sizeof(uboVS));
+		    // Unmap after data has been copied
+		    // Note: Since we requested a host coherent memory type for the uniform buffer, the write is instantly visible to the GPU
+		    vkUnmapMemory(device[gpuID], uniformDataVS.memory);
+        }
 	}
 
 	void prepare()
