@@ -221,24 +221,24 @@ void VulkanExampleBase::prepare()
 #if defined(__ANDROID__)
 	textureLoader->assetManager = androidApp->activity->assetManager;
 #endif
-	if (enableTextOverlay)
-	{
-		// Load the text rendering shaders
-		std::vector<VkPipelineShaderStageCreateInfo> shaderStages;
-		shaderStages.push_back(loadShader(getAssetPath() + "shaders/base/textoverlay.vert.spv", VK_SHADER_STAGE_VERTEX_BIT));
-		shaderStages.push_back(loadShader(getAssetPath() + "shaders/base/textoverlay.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT));
-		textOverlay = new VulkanTextOverlay(
-			vulkanDevice,
-			queue,
-			frameBuffers,
-			colorformat,
-			depthFormat,
-			&width,
-			&height,
-			shaderStages
-			);
-		updateTextOverlay();
-	}
+	//if (enableTextOverlay)
+	//{
+	//	// Load the text rendering shaders
+	//	std::vector<VkPipelineShaderStageCreateInfo> shaderStages;
+	//	shaderStages.push_back(loadShader(getAssetPath() + "shaders/base/textoverlay.vert.spv", VK_SHADER_STAGE_VERTEX_BIT));
+	//	shaderStages.push_back(loadShader(getAssetPath() + "shaders/base/textoverlay.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT));
+	//	textOverlay = new VulkanTextOverlay(
+	//		vulkanDevice,
+	//		queue,
+	//		frameBuffers,
+	//		colorformat,
+	//		depthFormat,
+	//		&width,
+	//		&height,
+	//		shaderStages
+	//		);
+	//	updateTextOverlay();
+	//}
 }
 
 VkPipelineShaderStageCreateInfo VulkanExampleBase::loadShader(std::string fileName, VkShaderStageFlagBits stage)
@@ -835,8 +835,8 @@ void VulkanExampleBase::initVulkan(bool enableValidation)
         // This is handled by a separate class that gets a logical device representation
         // and encapsulates functions related to a device
         vulkanDevice[gpuId] = new vk::VulkanDevice(physicalDevice[gpuId]);
-        VK_CHECK_RESULT(vulkanDevice[gpuId]->createLogicalDevice(enabledFeatures));
-        device = vulkanDevice[gpuId]->logicalDevice;
+        VK_CHECK_RESULT((vulkanDevice[gpuId])->createLogicalDevice(enabledFeatures));
+        device[gpuId] = vulkanDevice[gpuId]->logicalDevice;
 
         // todo: remove
         // Store properties (including limits) and features of the phyiscal device
@@ -944,7 +944,7 @@ HWND VulkanExampleBase::setupWindow(HINSTANCE hinstance, WNDPROC wndproc)
 {
 	this->windowInstance = hinstance;
 
-	bool fullscreen = false;
+	bool fullscreen = true;
 	for (auto arg : args)
 	{
 		if (arg == std::string("-fullscreen"))

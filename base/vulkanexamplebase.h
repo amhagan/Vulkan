@@ -93,14 +93,17 @@ protected:
 	VkPhysicalDeviceFeatures deviceFeatures;
 	// Stores all available memory (type) properties for the physical device
 	VkPhysicalDeviceMemoryProperties deviceMemoryProperties;
-	/** @brief Logical device, application's view of the physical device (GPU) */
+	
+/** @brief Logical device, application's view of the physical device (GPU) */
 	// todo: getter? should always point to VulkanDevice->device
-	VkDevice device;
+	
 	/** @brief Encapsulated physical and logical vulkan device */
 
 #ifdef MGPU
+    VkDevice device[2];
 	vk::VulkanDevice *vulkanDevice[2];
 #else
+    VkDevice device;
     vk::VulkanDevice *vulkanDevice;
 #endif
 
