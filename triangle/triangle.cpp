@@ -121,29 +121,29 @@ public:
 	~VulkanExample()
 	{
         
-		//// Clean up used Vulkan resources 
-		//// Note: Inherited destructor cleans up resources stored in base class
-		//vkDestroyPipeline(device, pipeline, nullptr);
+		// Clean up used Vulkan resources 
+		// Note: Inherited destructor cleans up resources stored in base class
+		vkDestroyPipeline(device, pipeline, nullptr);
 
-		//vkDestroyPipelineLayout(device, pipelineLayout, nullptr);
-		//vkDestroyDescriptorSetLayout(device, descriptorSetLayout, nullptr);
+		vkDestroyPipelineLayout(device, pipelineLayout, nullptr);
+		vkDestroyDescriptorSetLayout(device, descriptorSetLayout, nullptr);
 
-		//vkDestroyBuffer(device, vertices.buffer, nullptr);
-		//vkFreeMemory(device, vertices.memory, nullptr);
+		vkDestroyBuffer(device, vertices.buffer, nullptr);
+		vkFreeMemory(device, vertices.memory, nullptr);
 
-		//vkDestroyBuffer(device, indices.buffer, nullptr);
-		//vkFreeMemory(device, indices.memory, nullptr);
+		vkDestroyBuffer(device, indices.buffer, nullptr);
+		vkFreeMemory(device, indices.memory, nullptr);
 
-		//vkDestroyBuffer(device, uniformDataVS.buffer, nullptr);
-		//vkFreeMemory(device, uniformDataVS.memory, nullptr);
+		vkDestroyBuffer(device, uniformDataVS.buffer, nullptr);
+		vkFreeMemory(device, uniformDataVS.memory, nullptr);
 
-		//vkDestroySemaphore(device, presentCompleteSemaphore, nullptr);
-		//vkDestroySemaphore(device, renderCompleteSemaphore, nullptr);
+		vkDestroySemaphore(device, presentCompleteSemaphore, nullptr);
+		vkDestroySemaphore(device, renderCompleteSemaphore, nullptr);
 
-		//for (auto& fence : waitFences)
-		//{
-		//	vkDestroyFence(device, fence, nullptr);
-		//}
+		for (auto& fence : waitFences)
+		{
+			vkDestroyFence(device, fence, nullptr);
+		}
 	}
 
 	// This function is used to request a device memory type that supports all the property flags we request (e.g. device local, host visibile)
@@ -207,6 +207,7 @@ public:
 		cmdBufAllocateInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
 		cmdBufAllocateInfo.commandBufferCount = 1;
 	
+#ifdef MGPU
         for(int i = 0; i < 2; i++)
         {
 		    VK_CHECK_RESULT(vkAllocateCommandBuffers(device[i], &cmdBufAllocateInfo, &cmdBuffer));
@@ -218,6 +219,17 @@ public:
 			    VK_CHECK_RESULT(vkBeginCommandBuffer(cmdBuffer, &cmdBufInfo));
 		    }
         }
+#else
+
+        VK_CHECK_RESULT(vkAllocateCommandBuffers(device, &cmdBufAllocateInfo, &cmdBuffer));
+
+        // If requested, also start the new command buffer
+        if (begin)
+        {
+            VkCommandBufferBeginInfo cmdBufInfo = vkTools::initializers::commandBufferBeginInfo();
+            VK_CHECK_RESULT(vkBeginCommandBuffer(cmdBuffer, &cmdBufInfo));
+        }
+#endif
 
 		return cmdBuffer;
 	}

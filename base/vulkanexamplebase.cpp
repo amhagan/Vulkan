@@ -944,7 +944,7 @@ HWND VulkanExampleBase::setupWindow(HINSTANCE hinstance, WNDPROC wndproc)
 {
 	this->windowInstance = hinstance;
 
-	bool fullscreen = true;
+	bool fullscreen = false;
 	for (auto arg : args)
 	{
 		if (arg == std::string("-fullscreen"))
