@@ -196,17 +196,17 @@ public:
 			}
 		}
 
-		// Exit if either a graphics or a presenting queue hasn't been found
-		if (graphicsQueueNodeIndex == UINT32_MAX || presentQueueNodeIndex == UINT32_MAX) 
-		{
-			vkTools::exitFatal("Could not find a graphics and/or presenting queue!", "Fatal error");
-		}
+		//// Exit if either a graphics or a presenting queue hasn't been found
+		//if (graphicsQueueNodeIndex == UINT32_MAX || presentQueueNodeIndex == UINT32_MAX) 
+		//{
+		//	vkTools::exitFatal("Could not find a graphics and/or presenting queue!", "Fatal error");
+		//}
 
-		// todo : Add support for separate graphics and presenting queue
-		if (graphicsQueueNodeIndex != presentQueueNodeIndex) 
-		{
-			vkTools::exitFatal("Separate graphics and presenting queues are not supported yet!", "Fatal error");
-		}
+		//// todo : Add support for separate graphics and presenting queue
+		//if (graphicsQueueNodeIndex != presentQueueNodeIndex) 
+		//{
+		//	vkTools::exitFatal("Separate graphics and presenting queues are not supported yet!", "Fatal error");
+		//}
 
 		queueNodeIndex = graphicsQueueNodeIndex;
 
@@ -413,9 +413,9 @@ public:
 			colorAttachmentView.subresourceRange.layerCount = 1;
 			colorAttachmentView.viewType = VK_IMAGE_VIEW_TYPE_2D;
 			colorAttachmentView.flags = 0;
-
+            
 			buffers[i].image = images[i];
-
+          
 			colorAttachmentView.image = buffers[i].image;
 
 			err = vkCreateImageView(device, &colorAttachmentView, nullptr, &buffers[i].view);

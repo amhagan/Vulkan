@@ -239,8 +239,7 @@ public:
 
 		VK_CHECK_RESULT(vkEndCommandBuffer(commandBuffer));
 
-        //int totalDevices[] = { 0, 1 };
-        int totalDevices[] = { 0 };
+        int totalDevices[] = { 0, 1 };
         for (int gpuID : totalDevices)
         {
 		    VkSubmitInfo submitInfo = {};
@@ -268,7 +267,7 @@ public:
 	// Build separate command buffers for every framebuffer image
 	// Unlike in OpenGL all rendering commands are recorded once into command buffers that are then resubmitted to the queue
 	// This allows to generate work upfront and from multiple threads, one of the biggest advantages of Vulkan
-	void buildCommandBuffers()
+	void buildCommandBuffers(int gpuId)
 	{
 		VkCommandBufferBeginInfo cmdBufInfo = {};
 		cmdBufInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
@@ -283,7 +282,7 @@ public:
 		VkRenderPassBeginInfo renderPassBeginInfo = {};
 		renderPassBeginInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
 		renderPassBeginInfo.pNext = nullptr;
-		renderPassBeginInfo.renderPass = renderPass[0];
+		renderPassBeginInfo.renderPass = renderPass[gpuId];
 		renderPassBeginInfo.renderArea.offset.x = 0;
 		renderPassBeginInfo.renderArea.offset.y = 0;
 		renderPassBeginInfo.renderArea.extent.width = width;
@@ -291,16 +290,16 @@ public:
 		renderPassBeginInfo.clearValueCount = 2;
 		renderPassBeginInfo.pClearValues = clearValues;
 	
-		for (int32_t i = 0; i < drawCmdBuffers[0].size(); ++i)
+		for (int32_t i = 0; i < drawCmdBuffers[gpuId].size(); ++i)
 		{
 			// Set target frame buffer
-			renderPassBeginInfo.framebuffer = frameBuffers[0][i];
+			renderPassBeginInfo.framebuffer = frameBuffers[gpuId][i];
 
-			VK_CHECK_RESULT(vkBeginCommandBuffer(drawCmdBuffers[0][i], &cmdBufInfo));
+			VK_CHECK_RESULT(vkBeginCommandBuffer(drawCmdBuffers[gpuId][i], &cmdBufInfo));
 
 			// Start the first sub pass specified in our default render pass setup by the base class
 			// This will clear the color and depth attachment
-			vkCmdBeginRenderPass(drawCmdBuffers[0][i], &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
+			vkCmdBeginRenderPass(drawCmdBuffers[gpuId][i], &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
 
 			// Update dynamic viewport state
 			VkViewport viewport = {};
@@ -308,7 +307,7 @@ public:
 			viewport.width = (float)width;
 			viewport.minDepth = (float) 0.0f;
 			viewport.maxDepth = (float) 1.0f;
-			vkCmdSetViewport(drawCmdBuffers[0][i], 0, 1, &viewport);
+			vkCmdSetViewport(drawCmdBuffers[gpuId][i], 0, 1, &viewport);
 
 			// Update dynamic scissor state
 			VkRect2D scissor = {};
@@ -316,7 +315,7 @@ public:
 			scissor.extent.height = height;
 			scissor.offset.x = 0;
 			scissor.offset.y = 0;
-			vkCmdSetScissor(drawCmdBuffers[0][i], 0, 1, &scissor);
+			vkCmdSetScissor(drawCmdBuffers[gpuId][i], 0, 1, &scissor);
 
 			// Bind descriptor sets describing shader binding points
 			//vkCmdBindDescriptorSets(drawCmdBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, &descriptorSet, 0, nullptr);
@@ -335,49 +334,97 @@ public:
 			// Draw indexed triangle
 			//vkCmdDrawIndexed(drawCmdBuffers[i], indices.count, 1, 0, 0, 1);
 
-			vkCmdEndRenderPass(drawCmdBuffers[0][i]);
+			vkCmdEndRenderPass(drawCmdBuffers[gpuId][i]);
 
 			// Ending the render pass will add an implicit barrier transitioning the frame buffer color attachment to 
 			// VK_IMAGE_LAYOUT_PRESENT_SRC_KHR for presenting it to the windowing system
 
-			VK_CHECK_RESULT(vkEndCommandBuffer(drawCmdBuffers[0][i]));
+			VK_CHECK_RESULT(vkEndCommandBuffer(drawCmdBuffers[gpuId][i]));
 		}
 	}
 
 	void draw()
 	{
-		// Get next image in the swap chain (back/front buffer)
-		VK_CHECK_RESULT(swapChain.acquireNextImage(presentCompleteSemaphore[0], &currentBuffer));
 
-        // int totalDevices[] = { 0, 1 };
-        int totalDevices[] = { 0 };
+        // Get next image in the swap chain (back/front buffer)
+        VK_CHECK_RESULT(swapChain[0].acquireNextImage(presentCompleteSemaphore[0], &currentBuffer));
+
+        int totalDevices[] = { 0,1 };
         for (int gpuID : totalDevices)
-        {
-		    // Use a fence to wait until the command buffer has finished execution before using it again
-		    VK_CHECK_RESULT(vkWaitForFences(device[gpuID], 1, &waitFences[gpuID][currentBuffer], VK_TRUE, UINT64_MAX));
-		    VK_CHECK_RESULT(vkResetFences(device[gpuID], 1, &waitFences[gpuID][currentBuffer]));
+        {       
+        
+            // Use a fence to wait until the command buffer has finished execution before using it again
+            VK_CHECK_RESULT(vkWaitForFences(device[gpuID], 1, &waitFences[gpuID][currentBuffer], VK_TRUE, UINT64_MAX));
+            VK_CHECK_RESULT(vkResetFences(device[gpuID], 1, &waitFences[gpuID][currentBuffer]));
+       
+            // Pipeline stage at which the queue submission will wait (via pWaitSemaphores)
+            VkPipelineStageFlags waitStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+            
+            // The submit info structure specifices a command buffer queue submission batch
+            VkSubmitInfo submitInfo = {};
+            submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+            submitInfo.pWaitDstStageMask = &waitStageMask;									// Pointer to the list of pipeline stages that the semaphore waits will occur at
+            
+            if(gpuID == 0)
+            {   
+                submitInfo.pWaitSemaphores = presentCompleteSemaphore;							// Semaphore(s) to wait upon before the submitted command buffer starts executing
+                submitInfo.waitSemaphoreCount = 1;												// One wait semaphore																				
+            }
+            else
+            {
+                submitInfo.pWaitSemaphores = VK_NULL_HANDLE;							        // Semaphore(s) to wait upon before the submitted command buffer starts executing
+                submitInfo.waitSemaphoreCount = 0;												// One wait semaphore																				
+            }
+
+            submitInfo.pSignalSemaphores = &renderCompleteSemaphore[gpuID];						// Semaphore(s) to be signaled when command buffers have completed
+            submitInfo.signalSemaphoreCount = 0;											// One signal semaphore
+            submitInfo.pCommandBuffers = &drawCmdBuffers[gpuID][currentBuffer];					// Command buffers(s) to execute in this batch (submission)
+            submitInfo.commandBufferCount = 1;												// One command buffer
+
+            // Submit to the graphics queue passing a wait fence
+            VK_CHECK_RESULT(vkQueueSubmit(queue[gpuID], 1, &submitInfo, waitFences[gpuID][currentBuffer]));
         }
 
-		// Pipeline stage at which the queue submission will wait (via pWaitSemaphores)
-		VkPipelineStageFlags waitStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-		// The submit info structure specifices a command buffer queue submission batch
-		VkSubmitInfo submitInfo = {};
-		submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-		submitInfo.pWaitDstStageMask = &waitStageMask;									// Pointer to the list of pipeline stages that the semaphore waits will occur at
-		submitInfo.pWaitSemaphores = &presentCompleteSemaphore[0];							// Semaphore(s) to wait upon before the submitted command buffer starts executing
-		submitInfo.waitSemaphoreCount = 1;												// One wait semaphore																				
-		submitInfo.pSignalSemaphores = &renderCompleteSemaphore[0];						// Semaphore(s) to be signaled when command buffers have completed
-		submitInfo.signalSemaphoreCount = 1;											// One signal semaphore
-		submitInfo.pCommandBuffers = &drawCmdBuffers[0][currentBuffer];					// Command buffers(s) to execute in this batch (submission)
-		submitInfo.commandBufferCount = 1;												// One command buffer
+        ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+        // Copy + Blit from GPU 1 to GPU 0
+        // Buffer copies have to be submitted to a queue, so we need a command buffer for them
+        // Note: Some devices offer a dedicated transfer queue (with only the transfer bit set) that may be faster when doing lots of copies
+        // Source
+        VkImageBlit imageBlit{};
+        imageBlit.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        imageBlit.srcSubresource.layerCount = 1;
+        imageBlit.srcSubresource.mipLevel = 0;
+        imageBlit.srcOffsets[1].x = int32_t(width);
+        imageBlit.srcOffsets[1].y = int32_t(height);
+        imageBlit.srcOffsets[1].z = 1;
 
-		// Submit to the graphics queue passing a wait fence
-		VK_CHECK_RESULT(vkQueueSubmit(queue[0], 1, &submitInfo, waitFences[0][currentBuffer]));
-		
-		// Present the current buffer to the swap chain
-		// Pass the semaphore signaled by the command buffer submission from the submit info as the wait semaphore for swap chain presentation
-		// This ensures that the image is not presented to the windowing system until all commands have been submitted
-		VK_CHECK_RESULT(swapChain.queuePresent(queue[0], currentBuffer, renderCompleteSemaphore[0]));
+        // Destination
+        imageBlit.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        imageBlit.dstSubresource.layerCount = 1;
+        imageBlit.dstSubresource.mipLevel = 0;
+        imageBlit.dstOffsets[1].x = int32_t(width);
+        imageBlit.dstOffsets[1].y = int32_t(height);
+        imageBlit.dstOffsets[1].z = 1;
+
+        //VkCommandBuffer copyCmd = VulkanExampleBase::createCommandBuffer(0, VK_COMMAND_BUFFER_LEVEL_PRIMARY, false);
+
+        //vkCmdBlitImage(copyCmd,
+        //            swapChain[0].buffers[0].image,
+        //            VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+        //            swapChain[0].buffers[0].image,
+        //            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+        //            1,
+        //            &imageBlit,
+        //            VK_FILTER_LINEAR);
+
+        //vkFreeCommandBuffers(device[0], cmdPool[0], 1, &copyCmd);
+
+        ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+        // Present the current buffer to the swap chain
+        // Pass the semaphore signaled by the command buffer submission from the submit info as the wait semaphore for swap chain presentation
+        // This ensures that the image is not presented to the windowing system until all commands have been submitted
+        VK_CHECK_RESULT(swapChain[0].queuePresent(queue[0], currentBuffer, VK_NULL_HANDLE));
 	}
 
 	// Prepare vertex and index buffers for an indexed triangle
@@ -444,8 +491,7 @@ public:
 			// Buffer is used as the copy source
 			vertexBufferInfo.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
 
-            //int totalDevices[] = { 0, 1 };
-            int totalDevices[] = { 0 };
+            int totalDevices[] = { 0, 1 };
             for (int gpuID : totalDevices)
             {
 			    // Create a host-visible buffer to copy the vertex data to (staging buffer)
@@ -673,8 +719,7 @@ public:
 		allocInfo.descriptorSetCount = 1;
 		allocInfo.pSetLayouts = &descriptorSetLayout;
 
-        //int totalDevices[] = { 0, 1 };
-        int totalDevices[] = { 0 };
+        int totalDevices[] = { 0, 1 };
         for (int gpuID : totalDevices)
         {
 		    VK_CHECK_RESULT(vkAllocateDescriptorSets(device[gpuID], &allocInfo, &descriptorSet));
@@ -752,17 +797,16 @@ public:
 	// Note: Override of virtual function in the base class and called from within VulkanExampleBase::prepare
 	void setupFrameBuffer()
 	{
-		// int totalDevices[] = { 0, 1 };
-        int totalDevices[] = { 0 };
+		int totalDevices[] = { 0, 1 };
 		for (int gpuID : totalDevices)
 		{
 			// Create a frame buffer for every image in the swapchain
-			frameBuffers[gpuID].resize(swapChain.imageCount);
+			frameBuffers[gpuID].resize(swapChain[gpuID].imageCount);
 
 			for (size_t i = 0; i < frameBuffers[gpuID].size(); i++)
 			{
 				std::array<VkImageView, 2> attachments;
-				attachments[0] = swapChain.buffers[i].view;									// Color attachment is the view of the swapchain image			
+				attachments[0] = swapChain[gpuID].buffers[i].view;									// Color attachment is the view of the swapchain image			
 				attachments[1] = depthStencil[gpuID].view;											// Depth/Stencil attachment is the same for all frame buffers			
 
 				VkFramebufferCreateInfo frameBufferCreateInfo = {};
@@ -789,93 +833,95 @@ public:
 	// Note: Override of virtual function in the base class and called from within VulkanExampleBase::prepare
 	void setupRenderPass()
 	{
-		// This example will use a single render pass with one subpass
+        int totalDevices[] = { 0, 1 };
+        for (int gpuID : totalDevices)
+        {
+		    // This example will use a single render pass with one subpass
+		    // Descriptors for the attachments used by this renderpass
+		    std::array<VkAttachmentDescription, 2> attachments = {};
 
-		// Descriptors for the attachments used by this renderpass
-		std::array<VkAttachmentDescription, 2> attachments = {};
+		    // Color attachment
+		    attachments[0].format = colorformat;
+		    attachments[0].samples = VK_SAMPLE_COUNT_1_BIT;									// We don't use multi sampling in this example
+		    attachments[0].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;							// Clear this attachment at the start of the render pass
+		    attachments[0].storeOp = VK_ATTACHMENT_STORE_OP_STORE;							// Keep it's contents after the render pass is finished (for displaying it)
+		    attachments[0].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;					// We don't use stencil, so don't care for load
+		    attachments[0].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;				// Same for store
+		    attachments[0].initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;						// Layout at render pass start. Initial doesn't matter, so we use undefined
+		    attachments[0].finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;					// Layout to which the attachment is transitioned when the render pass is finished
+																						    // As we want to present the color buffer to the swapchain, we transition to PRESENT_KHR	
+		    // Depth attachment
+		    attachments[1].format = depthFormat;								
+		    attachments[1].samples = VK_SAMPLE_COUNT_1_BIT;						
+		    attachments[1].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;							// Clear depth at start of first subpass
+		    attachments[1].storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;						// We don't need depth after render pass has finished (DONT_CARE may result in better performance)
+		    attachments[1].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;					// No stencil
+		    attachments[1].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;				// No Stencil
+		    attachments[1].initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;						// Layout at render pass start. Initial doesn't matter, so we use undefined
+		    attachments[1].finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;	// Transition to depth/stencil attachment
 
-		// Color attachment
-		attachments[0].format = colorformat;
-		attachments[0].samples = VK_SAMPLE_COUNT_1_BIT;									// We don't use multi sampling in this example
-		attachments[0].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;							// Clear this attachment at the start of the render pass
-		attachments[0].storeOp = VK_ATTACHMENT_STORE_OP_STORE;							// Keep it's contents after the render pass is finished (for displaying it)
-		attachments[0].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;					// We don't use stencil, so don't care for load
-		attachments[0].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;				// Same for store
-		attachments[0].initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;						// Layout at render pass start. Initial doesn't matter, so we use undefined
-		attachments[0].finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;					// Layout to which the attachment is transitioned when the render pass is finished
-																						// As we want to present the color buffer to the swapchain, we transition to PRESENT_KHR	
-		// Depth attachment
-		attachments[1].format = depthFormat;								
-		attachments[1].samples = VK_SAMPLE_COUNT_1_BIT;						
-		attachments[1].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;							// Clear depth at start of first subpass
-		attachments[1].storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;						// We don't need depth after render pass has finished (DONT_CARE may result in better performance)
-		attachments[1].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;					// No stencil
-		attachments[1].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;				// No Stencil
-		attachments[1].initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;						// Layout at render pass start. Initial doesn't matter, so we use undefined
-		attachments[1].finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;	// Transition to depth/stencil attachment
+		    // Setup attachment references
+		    VkAttachmentReference colorReference = {};
+		    colorReference.attachment = 0;													// Attachment 0 is color
+		    colorReference.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;				// Attachment layout used as color during the subpass
 
-		// Setup attachment references
-		VkAttachmentReference colorReference = {};
-		colorReference.attachment = 0;													// Attachment 0 is color
-		colorReference.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;				// Attachment layout used as color during the subpass
+		    VkAttachmentReference depthReference = {};
+		    depthReference.attachment = 1;													// Attachment 1 is color
+		    depthReference.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;		// Attachment used as depth/stemcil used during the subpass
 
-		VkAttachmentReference depthReference = {};
-		depthReference.attachment = 1;													// Attachment 1 is color
-		depthReference.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;		// Attachment used as depth/stemcil used during the subpass
+		    // Setup a single subpass reference
+		    VkSubpassDescription subpassDescription = {};
+		    subpassDescription.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;			
+		    subpassDescription.colorAttachmentCount = 1;									// Subpass uses one color attachment
+		    subpassDescription.pColorAttachments = &colorReference;							// Reference to the color attachment in slot 0
+		    subpassDescription.pDepthStencilAttachment = &depthReference;					// Reference to the depth attachment in slot 1
+		    subpassDescription.inputAttachmentCount = 0;									// Input attachments can be used to sample from contents of a previous subpass
+		    subpassDescription.pInputAttachments = nullptr;									// (Input attachments not used by this example)
+		    subpassDescription.preserveAttachmentCount = 0;									// Preserved attachments can be used to loop (and preserve) attachments through subpasses
+		    subpassDescription.pPreserveAttachments = nullptr;								// (Preserve attachments not used by this example)
+		    subpassDescription.pResolveAttachments = nullptr;								// Resolve attachments are resolved at the end of a sub pass and can be used for e.g. multi sampling
 
-		// Setup a single subpass reference
-		VkSubpassDescription subpassDescription = {};
-		subpassDescription.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;			
-		subpassDescription.colorAttachmentCount = 1;									// Subpass uses one color attachment
-		subpassDescription.pColorAttachments = &colorReference;							// Reference to the color attachment in slot 0
-		subpassDescription.pDepthStencilAttachment = &depthReference;					// Reference to the depth attachment in slot 1
-		subpassDescription.inputAttachmentCount = 0;									// Input attachments can be used to sample from contents of a previous subpass
-		subpassDescription.pInputAttachments = nullptr;									// (Input attachments not used by this example)
-		subpassDescription.preserveAttachmentCount = 0;									// Preserved attachments can be used to loop (and preserve) attachments through subpasses
-		subpassDescription.pPreserveAttachments = nullptr;								// (Preserve attachments not used by this example)
-		subpassDescription.pResolveAttachments = nullptr;								// Resolve attachments are resolved at the end of a sub pass and can be used for e.g. multi sampling
+		    // Setup subpass dependencies
+		    // These will add the implicit ttachment layout transitionss specified by the attachment descriptions
+		    // The actual usage layout is preserved through the layout specified in the attachment reference		
+		    // Each subpass dependency will introduce a memory and execution dependency between the source and dest subpass described by
+		    // srcStageMask, dstStageMask, srcAccessMask, dstAccessMask (and dependencyFlags is set)
+		    // Note: VK_SUBPASS_EXTERNAL is a special constant that refers to all commands executed outside of the actual renderpass)
+		    std::array<VkSubpassDependency, 2> dependencies;
 
-		// Setup subpass dependencies
-		// These will add the implicit ttachment layout transitionss specified by the attachment descriptions
-		// The actual usage layout is preserved through the layout specified in the attachment reference		
-		// Each subpass dependency will introduce a memory and execution dependency between the source and dest subpass described by
-		// srcStageMask, dstStageMask, srcAccessMask, dstAccessMask (and dependencyFlags is set)
-		// Note: VK_SUBPASS_EXTERNAL is a special constant that refers to all commands executed outside of the actual renderpass)
-		std::array<VkSubpassDependency, 2> dependencies;
+		    // First dependency at the start of the renderpass
+		    // Does the transition from final to initial layout 
+		    dependencies[0].srcSubpass = VK_SUBPASS_EXTERNAL;								// Producer of the dependency 
+		    dependencies[0].dstSubpass = 0;													// Consumer is our single subpass that will wait for the execution depdendency
+		    dependencies[0].srcStageMask = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;			
+		    dependencies[0].dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;	
+		    dependencies[0].srcAccessMask = VK_ACCESS_MEMORY_READ_BIT;
+		    dependencies[0].dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+		    dependencies[0].dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT;
 
-		// First dependency at the start of the renderpass
-		// Does the transition from final to initial layout 
-		dependencies[0].srcSubpass = VK_SUBPASS_EXTERNAL;								// Producer of the dependency 
-		dependencies[0].dstSubpass = 0;													// Consumer is our single subpass that will wait for the execution depdendency
-		dependencies[0].srcStageMask = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;			
-		dependencies[0].dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;	
-		dependencies[0].srcAccessMask = VK_ACCESS_MEMORY_READ_BIT;
-		dependencies[0].dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-		dependencies[0].dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT;
+		    // Second dependency at the end the renderpass
+		    // Does the transition from the initial to the final layout
+		    dependencies[1].srcSubpass = 0;													// Producer of the dependency is our single subpass
+		    dependencies[1].dstSubpass = VK_SUBPASS_EXTERNAL;								// Consumer are all commands outside of the renderpass
+		    dependencies[1].srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;	
+		    dependencies[1].dstStageMask = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
+		    dependencies[1].srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+		    dependencies[1].dstAccessMask = VK_ACCESS_MEMORY_READ_BIT;
+		    dependencies[1].dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT;
 
-		// Second dependency at the end the renderpass
-		// Does the transition from the initial to the final layout
-		dependencies[1].srcSubpass = 0;													// Producer of the dependency is our single subpass
-		dependencies[1].dstSubpass = VK_SUBPASS_EXTERNAL;								// Consumer are all commands outside of the renderpass
-		dependencies[1].srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;	
-		dependencies[1].dstStageMask = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
-		dependencies[1].srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-		dependencies[1].dstAccessMask = VK_ACCESS_MEMORY_READ_BIT;
-		dependencies[1].dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT;
+		    // Create the actual renderpass
+		    VkRenderPassCreateInfo renderPassInfo = {};
+		    renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
+		    renderPassInfo.attachmentCount = static_cast<uint32_t>(attachments.size());		// Number of attachments used by this render pass
+		    renderPassInfo.pAttachments = attachments.data();								// Descriptions of the attachments used by the render pass
+		    renderPassInfo.subpassCount = 1;												// We only use one subpass in this example
+		    renderPassInfo.pSubpasses = &subpassDescription;								// Description of that subpass
+		    renderPassInfo.dependencyCount = static_cast<uint32_t>(dependencies.size());	// Number of subpass dependencies
+		    renderPassInfo.pDependencies = dependencies.data();								// Subpass dependencies used by the render pass
 
-		// Create the actual renderpass
-		VkRenderPassCreateInfo renderPassInfo = {};
-		renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
-		renderPassInfo.attachmentCount = static_cast<uint32_t>(attachments.size());		// Number of attachments used by this render pass
-		renderPassInfo.pAttachments = attachments.data();								// Descriptions of the attachments used by the render pass
-		renderPassInfo.subpassCount = 1;												// We only use one subpass in this example
-		renderPassInfo.pSubpasses = &subpassDescription;								// Description of that subpass
-		renderPassInfo.dependencyCount = static_cast<uint32_t>(dependencies.size());	// Number of subpass dependencies
-		renderPassInfo.pDependencies = dependencies.data();								// Subpass dependencies used by the render pass
-
-		VK_CHECK_RESULT(vkCreateRenderPass(device[0], &renderPassInfo, nullptr, &renderPass[0]));
-        VK_CHECK_RESULT(vkCreateRenderPass(device[1], &renderPassInfo, nullptr, &renderPass[1]));
-	}
+		    VK_CHECK_RESULT(vkCreateRenderPass(device[gpuID], &renderPassInfo, nullptr, &renderPass[gpuID]));
+        }
+    }
 
 	void preparePipelines()
 	{
@@ -1067,8 +1113,13 @@ public:
 		// preparePipelines();
 		//setupDescriptorPool();
 		//setupDescriptorSet();
-		buildCommandBuffers();
-		prepared = true;
+		
+        // Build Command Buffer on 2 GPUs
+        buildCommandBuffers(0);
+        buildCommandBuffers(1);
+		
+
+prepared = true;
 	}
 
 	virtual void render()

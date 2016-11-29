@@ -137,7 +137,7 @@ protected:
 	// Pipeline cache object
 	VkPipelineCache pipelineCache;
 	// Wraps the swap chain to present images (framebuffers) to the windowing system
-	VulkanSwapChain swapChain;
+	VulkanSwapChain swapChain[2];
 	// Synchronization semaphores
 	struct {
 		// Swap chain image presentation
@@ -290,7 +290,7 @@ public:
 
 	// Command buffer creation
 	// Creates and returns a new command buffer
-	VkCommandBuffer createCommandBuffer(VkCommandBufferLevel level, bool begin);
+	VkCommandBuffer createCommandBuffer(int gpuID, VkCommandBufferLevel level, bool begin);
 	// End the command buffer, submit it to the queue and free (if requested)
 	// Note : Waits for the queue to become idle
 	void flushCommandBuffer(VkCommandBuffer commandBuffer, VkQueue queue, bool free);
