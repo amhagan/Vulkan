@@ -28,7 +28,7 @@
 
 #define VERTEX_BUFFER_BIND_ID 0
 // Set to "true" to enable Vulkan's validation layers (see vulkandebug.cpp for details)
-#define ENABLE_VALIDATION false
+#define ENABLE_VALIDATION true
 // Set to "true" to use staging buffers for uploading vertex and index data to device local memory
 // See "prepareVertices" for details on what's staging and on why to use it
 #define USE_STAGING true
@@ -102,12 +102,12 @@ public:
 
 	// Semaphores
 	// Used to coordinate operations within the graphics queue and ensure correct command ordering
-	VkSemaphore presentCompleteSemaphore;
-	VkSemaphore renderCompleteSemaphore;
+	VkSemaphore presentCompleteSemaphore[2];
+	VkSemaphore renderCompleteSemaphore[2];
 
 	// Fences
 	// Used to check the completion of queue operations (e.g. command buffer execution)
-	std::vector<VkFence> waitFences;
+	std::vector<VkFence> waitFences[2];
 
 	VulkanExample() : VulkanExampleBase(ENABLE_VALIDATION)
 	{
@@ -139,10 +139,10 @@ public:
 		    vkDestroyBuffer(device[gpuID], uniformDataVS.buffer, nullptr);
 		    vkFreeMemory(device[gpuID], uniformDataVS.memory, nullptr);
 
-		    vkDestroySemaphore(device[gpuID], presentCompleteSemaphore, nullptr);
-		    vkDestroySemaphore(device[gpuID], renderCompleteSemaphore, nullptr);
+		    vkDestroySemaphore(device[gpuID], presentCompleteSemaphore[gpuID], nullptr);
+		    vkDestroySemaphore(device[gpuID], renderCompleteSemaphore[gpuID], nullptr);
 
-		    for (auto& fence : waitFences)
+		    for (auto& fence : waitFences[gpuID])
 		    {
 			    vkDestroyFence(device[gpuID], fence, nullptr);
 		    }
@@ -184,18 +184,18 @@ public:
 		    semaphoreCreateInfo.pNext = nullptr;
 
 		    // Semaphore used to ensures that image presentation is complete before starting to submit again
-		    VK_CHECK_RESULT(vkCreateSemaphore(device[gpuID], &semaphoreCreateInfo, nullptr, &presentCompleteSemaphore));
+		    VK_CHECK_RESULT(vkCreateSemaphore(device[gpuID], &semaphoreCreateInfo, nullptr, &presentCompleteSemaphore[gpuID]));
 
 		    // Semaphore used to ensures that all commands submitted have been finished before submitting the image to the queue
-		    VK_CHECK_RESULT(vkCreateSemaphore(device[gpuID], &semaphoreCreateInfo, nullptr, &renderCompleteSemaphore));
+		    VK_CHECK_RESULT(vkCreateSemaphore(device[gpuID], &semaphoreCreateInfo, nullptr, &renderCompleteSemaphore[gpuID]));
 
 		    // Fences (Used to check draw command buffer completion)
 		    VkFenceCreateInfo fenceCreateInfo = {};
 		    fenceCreateInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
 		    // Create in signaled state so we don't wait on first render of each command buffer
 		    fenceCreateInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
-		    waitFences.resize(drawCmdBuffers.size());
-		    for (auto& fence : waitFences)
+		    waitFences[gpuID].resize(drawCmdBuffers[gpuID].size());
+		    for (auto& fence : waitFences[gpuID])
 		    {
 			    VK_CHECK_RESULT(vkCreateFence(device[gpuID], &fenceCreateInfo, nullptr, &fence));
 		    }
@@ -209,16 +209,16 @@ public:
 	{
 		VkCommandBuffer cmdBuffer;
 
-		VkCommandBufferAllocateInfo cmdBufAllocateInfo = {};
-		cmdBufAllocateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-		cmdBufAllocateInfo.commandPool = cmdPool;
-		cmdBufAllocateInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-		cmdBufAllocateInfo.commandBufferCount = 1;
+		int totalDevices[] = { 0, 1 };
+		for (int gpuID : totalDevices)
+		{
+			VkCommandBufferAllocateInfo cmdBufAllocateInfo = {};
+			cmdBufAllocateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+			cmdBufAllocateInfo.commandPool = cmdPool[gpuID];
+			cmdBufAllocateInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+			cmdBufAllocateInfo.commandBufferCount = 1;
 	
-#ifdef MGPU
-        for(int i = 0; i < 2; i++)
-        {
-		    VK_CHECK_RESULT(vkAllocateCommandBuffers(device[i], &cmdBufAllocateInfo, &cmdBuffer));
+		    VK_CHECK_RESULT(vkAllocateCommandBuffers(device[gpuID], &cmdBufAllocateInfo, &cmdBuffer));
 
 		    // If requested, also start the new command buffer
 		    if (begin)
@@ -227,17 +227,6 @@ public:
 			    VK_CHECK_RESULT(vkBeginCommandBuffer(cmdBuffer, &cmdBufInfo));
 		    }
         }
-#else
-
-        VK_CHECK_RESULT(vkAllocateCommandBuffers(device, &cmdBufAllocateInfo, &cmdBuffer));
-
-        // If requested, also start the new command buffer
-        if (begin)
-        {
-            VkCommandBufferBeginInfo cmdBufInfo = vkTools::initializers::commandBufferBeginInfo();
-            VK_CHECK_RESULT(vkBeginCommandBuffer(cmdBuffer, &cmdBufInfo));
-        }
-#endif
 
 		return cmdBuffer;
 	}
@@ -272,7 +261,7 @@ public:
 		    VK_CHECK_RESULT(vkWaitForFences(device[gpuID], 1, &fence, VK_TRUE, DEFAULT_FENCE_TIMEOUT));
 
 		    vkDestroyFence(device[gpuID], fence, nullptr);
-		    vkFreeCommandBuffers(device[gpuID], cmdPool, 1, &commandBuffer);
+		    vkFreeCommandBuffers(device[gpuID], cmdPool[gpuID], 1, &commandBuffer);
         }
 	}
 
@@ -294,7 +283,7 @@ public:
 		VkRenderPassBeginInfo renderPassBeginInfo = {};
 		renderPassBeginInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
 		renderPassBeginInfo.pNext = nullptr;
-		renderPassBeginInfo.renderPass = renderPass;
+		renderPassBeginInfo.renderPass = renderPass[0];
 		renderPassBeginInfo.renderArea.offset.x = 0;
 		renderPassBeginInfo.renderArea.offset.y = 0;
 		renderPassBeginInfo.renderArea.extent.width = width;
@@ -302,16 +291,16 @@ public:
 		renderPassBeginInfo.clearValueCount = 2;
 		renderPassBeginInfo.pClearValues = clearValues;
 	
-		for (int32_t i = 0; i < drawCmdBuffers.size(); ++i)
+		for (int32_t i = 0; i < drawCmdBuffers[0].size(); ++i)
 		{
 			// Set target frame buffer
-			renderPassBeginInfo.framebuffer = frameBuffers[i];
+			renderPassBeginInfo.framebuffer = frameBuffers[0][i];
 
-			VK_CHECK_RESULT(vkBeginCommandBuffer(drawCmdBuffers[i], &cmdBufInfo));
+			VK_CHECK_RESULT(vkBeginCommandBuffer(drawCmdBuffers[0][i], &cmdBufInfo));
 
 			// Start the first sub pass specified in our default render pass setup by the base class
 			// This will clear the color and depth attachment
-			vkCmdBeginRenderPass(drawCmdBuffers[i], &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
+			vkCmdBeginRenderPass(drawCmdBuffers[0][i], &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
 
 			// Update dynamic viewport state
 			VkViewport viewport = {};
@@ -319,7 +308,7 @@ public:
 			viewport.width = (float)width;
 			viewport.minDepth = (float) 0.0f;
 			viewport.maxDepth = (float) 1.0f;
-			vkCmdSetViewport(drawCmdBuffers[i], 0, 1, &viewport);
+			vkCmdSetViewport(drawCmdBuffers[0][i], 0, 1, &viewport);
 
 			// Update dynamic scissor state
 			VkRect2D scissor = {};
@@ -327,7 +316,7 @@ public:
 			scissor.extent.height = height;
 			scissor.offset.x = 0;
 			scissor.offset.y = 0;
-			vkCmdSetScissor(drawCmdBuffers[i], 0, 1, &scissor);
+			vkCmdSetScissor(drawCmdBuffers[0][i], 0, 1, &scissor);
 
 			// Bind descriptor sets describing shader binding points
 			//vkCmdBindDescriptorSets(drawCmdBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, &descriptorSet, 0, nullptr);
@@ -346,27 +335,27 @@ public:
 			// Draw indexed triangle
 			//vkCmdDrawIndexed(drawCmdBuffers[i], indices.count, 1, 0, 0, 1);
 
-			vkCmdEndRenderPass(drawCmdBuffers[i]);
+			vkCmdEndRenderPass(drawCmdBuffers[0][i]);
 
 			// Ending the render pass will add an implicit barrier transitioning the frame buffer color attachment to 
 			// VK_IMAGE_LAYOUT_PRESENT_SRC_KHR for presenting it to the windowing system
 
-			VK_CHECK_RESULT(vkEndCommandBuffer(drawCmdBuffers[i]));
+			VK_CHECK_RESULT(vkEndCommandBuffer(drawCmdBuffers[0][i]));
 		}
 	}
 
 	void draw()
 	{
 		// Get next image in the swap chain (back/front buffer)
-		VK_CHECK_RESULT(swapChain.acquireNextImage(presentCompleteSemaphore, &currentBuffer));
+		VK_CHECK_RESULT(swapChain.acquireNextImage(presentCompleteSemaphore[0], &currentBuffer));
 
         // int totalDevices[] = { 0, 1 };
         int totalDevices[] = { 0 };
         for (int gpuID : totalDevices)
         {
 		    // Use a fence to wait until the command buffer has finished execution before using it again
-		    VK_CHECK_RESULT(vkWaitForFences(device[gpuID], 1, &waitFences[currentBuffer], VK_TRUE, UINT64_MAX));
-		    VK_CHECK_RESULT(vkResetFences(device[gpuID], 1, &waitFences[currentBuffer]));
+		    VK_CHECK_RESULT(vkWaitForFences(device[gpuID], 1, &waitFences[gpuID][currentBuffer], VK_TRUE, UINT64_MAX));
+		    VK_CHECK_RESULT(vkResetFences(device[gpuID], 1, &waitFences[gpuID][currentBuffer]));
         }
 
 		// Pipeline stage at which the queue submission will wait (via pWaitSemaphores)
@@ -375,20 +364,20 @@ public:
 		VkSubmitInfo submitInfo = {};
 		submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
 		submitInfo.pWaitDstStageMask = &waitStageMask;									// Pointer to the list of pipeline stages that the semaphore waits will occur at
-		submitInfo.pWaitSemaphores = &presentCompleteSemaphore;							// Semaphore(s) to wait upon before the submitted command buffer starts executing
+		submitInfo.pWaitSemaphores = &presentCompleteSemaphore[0];							// Semaphore(s) to wait upon before the submitted command buffer starts executing
 		submitInfo.waitSemaphoreCount = 1;												// One wait semaphore																				
-		submitInfo.pSignalSemaphores = &renderCompleteSemaphore;						// Semaphore(s) to be signaled when command buffers have completed
+		submitInfo.pSignalSemaphores = &renderCompleteSemaphore[0];						// Semaphore(s) to be signaled when command buffers have completed
 		submitInfo.signalSemaphoreCount = 1;											// One signal semaphore
-		submitInfo.pCommandBuffers = &drawCmdBuffers[currentBuffer];					// Command buffers(s) to execute in this batch (submission)
+		submitInfo.pCommandBuffers = &drawCmdBuffers[0][currentBuffer];					// Command buffers(s) to execute in this batch (submission)
 		submitInfo.commandBufferCount = 1;												// One command buffer
 
 		// Submit to the graphics queue passing a wait fence
-		VK_CHECK_RESULT(vkQueueSubmit(queue[0], 1, &submitInfo, waitFences[currentBuffer]));
+		VK_CHECK_RESULT(vkQueueSubmit(queue[0], 1, &submitInfo, waitFences[0][currentBuffer]));
 		
 		// Present the current buffer to the swap chain
 		// Pass the semaphore signaled by the command buffer submission from the submit info as the wait semaphore for swap chain presentation
 		// This ensures that the image is not presented to the windowing system until all commands have been submitted
-		VK_CHECK_RESULT(swapChain.queuePresent(queue[0], currentBuffer, renderCompleteSemaphore));
+		VK_CHECK_RESULT(swapChain.queuePresent(queue[0], currentBuffer, renderCompleteSemaphore[0]));
 	}
 
 	// Prepare vertex and index buffers for an indexed triangle
@@ -729,17 +718,17 @@ public:
 		    image.tiling = VK_IMAGE_TILING_OPTIMAL;
 		    image.usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
 		    image.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-		    VK_CHECK_RESULT(vkCreateImage(device[gpuID], &image, nullptr, &depthStencil.image));
+		    VK_CHECK_RESULT(vkCreateImage(device[gpuID], &image, nullptr, &depthStencil[gpuID].image));
 
 		    // Allocate memory for the image (device local) and bind it to our image
 		    VkMemoryAllocateInfo memAlloc = {};
 		    memAlloc.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
 		    VkMemoryRequirements memReqs;
-		    vkGetImageMemoryRequirements(device[gpuID], depthStencil.image, &memReqs);
+		    vkGetImageMemoryRequirements(device[gpuID], depthStencil[gpuID].image, &memReqs);
 		    memAlloc.allocationSize = memReqs.size;
 		    memAlloc.memoryTypeIndex = getMemoryTypeIndex(memReqs.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-		    VK_CHECK_RESULT(vkAllocateMemory(device[gpuID], &memAlloc, nullptr, &depthStencil.mem));
-		    VK_CHECK_RESULT(vkBindImageMemory(device[gpuID], depthStencil.image, depthStencil.mem, 0));
+		    VK_CHECK_RESULT(vkAllocateMemory(device[gpuID], &memAlloc, nullptr, &depthStencil[gpuID].mem));
+		    VK_CHECK_RESULT(vkBindImageMemory(device[gpuID], depthStencil[gpuID].image, depthStencil[gpuID].mem, 0));
 
 		    // Create a view for the depth stencil image
 		    // Images aren't directly accessed in Vulkan, but rather through views described by a subresource range
@@ -754,8 +743,8 @@ public:
 		    depthStencilView.subresourceRange.levelCount = 1;
 		    depthStencilView.subresourceRange.baseArrayLayer = 0;
 		    depthStencilView.subresourceRange.layerCount = 1;
-		    depthStencilView.image = depthStencil.image;
-		    VK_CHECK_RESULT(vkCreateImageView(device[gpuID], &depthStencilView, nullptr, &depthStencil.view));
+		    depthStencilView.image = depthStencil[gpuID].image;
+		    VK_CHECK_RESULT(vkCreateImageView(device[gpuID], &depthStencilView, nullptr, &depthStencil[gpuID].view));
         }   
 	}
 
@@ -763,26 +752,33 @@ public:
 	// Note: Override of virtual function in the base class and called from within VulkanExampleBase::prepare
 	void setupFrameBuffer()
 	{
-		// Create a frame buffer for every image in the swapchain
-		frameBuffers.resize(swapChain.imageCount);
-		for (size_t i = 0; i < frameBuffers.size(); i++)
+		// int totalDevices[] = { 0, 1 };
+        int totalDevices[] = { 0 };
+		for (int gpuID : totalDevices)
 		{
-			std::array<VkImageView, 2> attachments;										
-			attachments[0] = swapChain.buffers[i].view;									// Color attachment is the view of the swapchain image			
-			attachments[1] = depthStencil.view;											// Depth/Stencil attachment is the same for all frame buffers			
+			// Create a frame buffer for every image in the swapchain
+			frameBuffers[gpuID].resize(swapChain.imageCount);
 
-			VkFramebufferCreateInfo frameBufferCreateInfo = {};
-			frameBufferCreateInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
-			// All frame buffers use the same renderpass setup
-			frameBufferCreateInfo.renderPass = renderPass;
-			frameBufferCreateInfo.attachmentCount = static_cast<uint32_t>(attachments.size());
-			frameBufferCreateInfo.pAttachments = attachments.data();
-			frameBufferCreateInfo.width = width;
-			frameBufferCreateInfo.height = height;
-			frameBufferCreateInfo.layers = 1;
-			// Create the framebuffer
-			VK_CHECK_RESULT(vkCreateFramebuffer(device[0], &frameBufferCreateInfo, nullptr, &frameBuffers[i]));
-            VK_CHECK_RESULT(vkCreateFramebuffer(device[1], &frameBufferCreateInfo, nullptr, &frameBuffers[i]));
+			for (size_t i = 0; i < frameBuffers[gpuID].size(); i++)
+			{
+				std::array<VkImageView, 2> attachments;
+				attachments[0] = swapChain.buffers[i].view;									// Color attachment is the view of the swapchain image			
+				attachments[1] = depthStencil[gpuID].view;											// Depth/Stencil attachment is the same for all frame buffers			
+
+				VkFramebufferCreateInfo frameBufferCreateInfo = {};
+				frameBufferCreateInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+
+				// All frame buffers use the same renderpass setup
+				frameBufferCreateInfo.renderPass = renderPass[gpuID];
+				frameBufferCreateInfo.attachmentCount = static_cast<uint32_t>(attachments.size());
+				frameBufferCreateInfo.pAttachments = attachments.data();
+				frameBufferCreateInfo.width = width;
+				frameBufferCreateInfo.height = height;
+				frameBufferCreateInfo.layers = 1;
+
+				// Create the framebuffer
+				VK_CHECK_RESULT(vkCreateFramebuffer(device[gpuID], &frameBufferCreateInfo, nullptr, &frameBuffers[gpuID][i]));
+			}
 		}
 	}
 
@@ -877,8 +873,8 @@ public:
 		renderPassInfo.dependencyCount = static_cast<uint32_t>(dependencies.size());	// Number of subpass dependencies
 		renderPassInfo.pDependencies = dependencies.data();								// Subpass dependencies used by the render pass
 
-		VK_CHECK_RESULT(vkCreateRenderPass(device[0], &renderPassInfo, nullptr, &renderPass));
-        VK_CHECK_RESULT(vkCreateRenderPass(device[1], &renderPassInfo, nullptr, &renderPass));
+		VK_CHECK_RESULT(vkCreateRenderPass(device[0], &renderPassInfo, nullptr, &renderPass[0]));
+        VK_CHECK_RESULT(vkCreateRenderPass(device[1], &renderPassInfo, nullptr, &renderPass[1]));
 	}
 
 	void preparePipelines()
@@ -893,7 +889,7 @@ public:
 		// The layout used for this pipeline (can be shared among multiple pipelines using the same layout)
 		pipelineCreateInfo.layout = pipelineLayout;
 		// Renderpass this pipeline is attached to
-		pipelineCreateInfo.renderPass = renderPass;
+		pipelineCreateInfo.renderPass = renderPass[0];
 
 		// Construct the differnent states making up the pipeline
 		
@@ -981,7 +977,7 @@ public:
 		pipelineCreateInfo.pMultisampleState = &multisampleState;
 		pipelineCreateInfo.pViewportState = &viewportState;
 		pipelineCreateInfo.pDepthStencilState = &depthStencilState;
-		pipelineCreateInfo.renderPass = renderPass;
+		pipelineCreateInfo.renderPass = renderPass[0];
 		pipelineCreateInfo.pDynamicState = &dynamicState;
 
 		// Create rendering pipeline using the specified states

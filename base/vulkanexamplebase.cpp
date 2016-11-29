@@ -77,7 +77,7 @@ const std::string VulkanExampleBase::getAssetPath()
 
 bool VulkanExampleBase::checkCommandBuffers()
 {
-	for (auto& cmdBuffer : drawCmdBuffers)
+	for (auto& cmdBuffer : drawCmdBuffers[0])
 	{
 		if (cmdBuffer == VK_NULL_HANDLE)
 		{
@@ -89,87 +89,99 @@ bool VulkanExampleBase::checkCommandBuffers()
 
 void VulkanExampleBase::createCommandBuffers()
 {
-	// Create one command buffer for each swap chain image and reuse for rendering
-	drawCmdBuffers.resize(swapChain.imageCount);
+	int totalDevices[] = { 0, 1 };
+	for (int gpuID : totalDevices)
+	{
+		// Create one command buffer for each swap chain image and reuse for rendering
+		drawCmdBuffers[gpuID].resize(swapChain.imageCount);
 
-	VkCommandBufferAllocateInfo cmdBufAllocateInfo =
-		vkTools::initializers::commandBufferAllocateInfo(
-			cmdPool,
-			VK_COMMAND_BUFFER_LEVEL_PRIMARY,
-			static_cast<uint32_t>(drawCmdBuffers.size()));
+		VkCommandBufferAllocateInfo cmdBufAllocateInfo =
+			vkTools::initializers::commandBufferAllocateInfo(
+				cmdPool[gpuID],
+				VK_COMMAND_BUFFER_LEVEL_PRIMARY,
+				static_cast<uint32_t>(drawCmdBuffers[gpuID].size()));
 
-	VK_CHECK_RESULT(vkAllocateCommandBuffers(device[0], &cmdBufAllocateInfo, drawCmdBuffers.data()));
-    VK_CHECK_RESULT(vkAllocateCommandBuffers(device[1], &cmdBufAllocateInfo, drawCmdBuffers.data()));
+		VK_CHECK_RESULT(vkAllocateCommandBuffers(device[gpuID], &cmdBufAllocateInfo, drawCmdBuffers[gpuID].data()));
+	}
 }
 
 void VulkanExampleBase::destroyCommandBuffers()
 {
-	vkFreeCommandBuffers(device[0], cmdPool, static_cast<uint32_t>(drawCmdBuffers.size()), drawCmdBuffers.data());
-    vkFreeCommandBuffers(device[1], cmdPool, static_cast<uint32_t>(drawCmdBuffers.size()), drawCmdBuffers.data());
+	vkFreeCommandBuffers(device[0], cmdPool[0], static_cast<uint32_t>(drawCmdBuffers[0].size()), drawCmdBuffers[0].data());
+    vkFreeCommandBuffers(device[1], cmdPool[1], static_cast<uint32_t>(drawCmdBuffers[1].size()), drawCmdBuffers[1].data());
 }
 
 void VulkanExampleBase::createSetupCommandBuffer()
 {
-	if (setupCmdBuffer != VK_NULL_HANDLE)
+	int totalDevices[] = { 0, 1 };
+	for (int gpuID : totalDevices)
 	{
-		vkFreeCommandBuffers(device[0], cmdPool, 1, &setupCmdBuffer);
-        vkFreeCommandBuffers(device[1], cmdPool, 1, &setupCmdBuffer);
-		setupCmdBuffer = VK_NULL_HANDLE; // todo : check if still necessary
+		setupCmdBuffer[gpuID] = VK_NULL_HANDLE; // todo : check if still necessary
+
+		// Command Buffer Allocator
+		VkCommandBufferAllocateInfo cmdBufAllocateInfo =
+			vkTools::initializers::commandBufferAllocateInfo(
+				cmdPool[gpuID],
+				VK_COMMAND_BUFFER_LEVEL_PRIMARY,
+				1);
+
+ 		if (setupCmdBuffer[gpuID] != VK_NULL_HANDLE)
+ 		{
+ 			vkFreeCommandBuffers(device[gpuID], cmdPool[gpuID], 1, &setupCmdBuffer[gpuID]);
+ 		}
+
+		VK_CHECK_RESULT(vkAllocateCommandBuffers(device[gpuID], &cmdBufAllocateInfo, &setupCmdBuffer[gpuID]));
+
+		VkCommandBufferBeginInfo cmdBufInfo = {};
+		cmdBufInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+
+		VK_CHECK_RESULT(vkBeginCommandBuffer(setupCmdBuffer[gpuID], &cmdBufInfo));
 	}
-
-	VkCommandBufferAllocateInfo cmdBufAllocateInfo =
-		vkTools::initializers::commandBufferAllocateInfo(
-			cmdPool,
-			VK_COMMAND_BUFFER_LEVEL_PRIMARY,
-			1);
-
-	VK_CHECK_RESULT(vkAllocateCommandBuffers(device[0], &cmdBufAllocateInfo, &setupCmdBuffer));
-    VK_CHECK_RESULT(vkAllocateCommandBuffers(device[1], &cmdBufAllocateInfo, &setupCmdBuffer));
-
-	VkCommandBufferBeginInfo cmdBufInfo = {};
-	cmdBufInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-
-	VK_CHECK_RESULT(vkBeginCommandBuffer(setupCmdBuffer, &cmdBufInfo));
 }
 
 void VulkanExampleBase::flushSetupCommandBuffer()
 {
-	if (setupCmdBuffer == VK_NULL_HANDLE)
-		return;
+	int totalDevices[] = { 0, 1 };
+	for (int gpuID : totalDevices)
+	{
+		if (setupCmdBuffer == VK_NULL_HANDLE)
+			return;
 
-	VK_CHECK_RESULT(vkEndCommandBuffer(setupCmdBuffer));
+		VK_CHECK_RESULT(vkEndCommandBuffer(setupCmdBuffer[gpuID]));
 
-	VkSubmitInfo submitInfo = {};
-	submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-	submitInfo.commandBufferCount = 1;
-	submitInfo.pCommandBuffers = &setupCmdBuffer;
+		VkSubmitInfo submitInfo = {};
+		submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+		submitInfo.commandBufferCount = 1;
+		submitInfo.pCommandBuffers = &setupCmdBuffer[gpuID];
 
-	VK_CHECK_RESULT(vkQueueSubmit(queue[0], 1, &submitInfo, VK_NULL_HANDLE));
-	VK_CHECK_RESULT(vkQueueWaitIdle(queue[0]));
+		VK_CHECK_RESULT(vkQueueSubmit(queue[gpuID], 1, &submitInfo, VK_NULL_HANDLE));
+		vkFreeCommandBuffers(device[gpuID], cmdPool[gpuID], 1, &setupCmdBuffer[gpuID]);
 
-	vkFreeCommandBuffers(device[0], cmdPool, 1, &setupCmdBuffer);
-   // vkFreeCommandBuffers(device[1], cmdPool, 1, &setupCmdBuffer);
-	setupCmdBuffer = VK_NULL_HANDLE; 
+		setupCmdBuffer[gpuID] = VK_NULL_HANDLE;
+	}
 }
 
 VkCommandBuffer VulkanExampleBase::createCommandBuffer(VkCommandBufferLevel level, bool begin)
 {
 	VkCommandBuffer cmdBuffer;
 
-	VkCommandBufferAllocateInfo cmdBufAllocateInfo =
-		vkTools::initializers::commandBufferAllocateInfo(
-			cmdPool,
-			level,
-			1);
-
-	VK_CHECK_RESULT(vkAllocateCommandBuffers(device[0], &cmdBufAllocateInfo, &cmdBuffer));
-    VK_CHECK_RESULT(vkAllocateCommandBuffers(device[1], &cmdBufAllocateInfo, &cmdBuffer));
-
-	// If requested, also start the new command buffer
-	if (begin)
+	int totalDevices[] = { 0, 1 };
+	for (int gpuID : totalDevices)
 	{
-		VkCommandBufferBeginInfo cmdBufInfo = vkTools::initializers::commandBufferBeginInfo();
-		VK_CHECK_RESULT(vkBeginCommandBuffer(cmdBuffer, &cmdBufInfo));
+		VkCommandBufferAllocateInfo cmdBufAllocateInfo =
+			vkTools::initializers::commandBufferAllocateInfo(
+				cmdPool[gpuID],
+				level,
+				1);
+
+		VK_CHECK_RESULT(vkAllocateCommandBuffers(device[gpuID], &cmdBufAllocateInfo, &cmdBuffer));
+
+		// If requested, also start the new command buffer
+		if (begin)
+		{
+			VkCommandBufferBeginInfo cmdBufInfo = vkTools::initializers::commandBufferBeginInfo();
+			VK_CHECK_RESULT(vkBeginCommandBuffer(cmdBuffer, &cmdBufInfo));
+		}
 	}
 
 	return cmdBuffer;
@@ -194,8 +206,8 @@ void VulkanExampleBase::flushCommandBuffer(VkCommandBuffer commandBuffer, VkQueu
 
 	if (free)
 	{
-		vkFreeCommandBuffers(device[0], cmdPool, 1, &commandBuffer);
-        vkFreeCommandBuffers(device[1], cmdPool, 1, &commandBuffer);
+		vkFreeCommandBuffers(device[0], cmdPool[0], 1, &commandBuffer);
+        vkFreeCommandBuffers(device[1], cmdPool[1], 1, &commandBuffer);
 	}
 }
 
@@ -225,7 +237,7 @@ void VulkanExampleBase::prepare()
 	// Recreate setup command buffer for derived class
 	createSetupCommandBuffer();
 	// Create a simple texture loader class
-	textureLoader = new vkTools::VulkanTextureLoader(vulkanDevice[0], queue[0], cmdPool);
+	textureLoader = new vkTools::VulkanTextureLoader(vulkanDevice[0], queue[0], cmdPool[0]);
 #if defined(__ANDROID__)
 	textureLoader->assetManager = androidApp->activity->assetManager;
 #endif
@@ -363,7 +375,7 @@ void VulkanExampleBase::loadMesh(std::string filename, vkMeshLoader::MeshBuffer 
 		copyCmd,
 		queue[0]);
 
-	vkFreeCommandBuffers(device[0], cmdPool, 1, &copyCmd);
+	vkFreeCommandBuffers(device[0], cmdPool[0], 1, &copyCmd);
 
 	meshBuffer->dim = mesh->dim.size;
 
@@ -750,7 +762,7 @@ VulkanExampleBase::~VulkanExampleBase()
 	    }
 	    if (setupCmdBuffer != VK_NULL_HANDLE)
 	    {
-		    vkFreeCommandBuffers(device[gpuID], cmdPool, 1, &setupCmdBuffer);
+		    vkFreeCommandBuffers(device[gpuID], cmdPool[gpuID], 1, &setupCmdBuffer[gpuID]);
 	    }
     }
 
@@ -758,19 +770,20 @@ VulkanExampleBase::~VulkanExampleBase()
 
     for (int gpuID : totalDevices)
     {
-        vkDestroyRenderPass(device[gpuID], renderPass, nullptr);
-        for (uint32_t i = 0; i < frameBuffers.size(); i++)
+        vkDestroyRenderPass(device[gpuID], renderPass[gpuID], nullptr);
+        for (uint32_t i = 0; i < frameBuffers[gpuID].size(); i++)
         {
-            vkDestroyFramebuffer(device[gpuID], frameBuffers[i], nullptr);
+            vkDestroyFramebuffer(device[gpuID], frameBuffers[gpuID][i], nullptr);
         }
 
         for (auto& shaderModule : shaderModules)
         {
             vkDestroyShaderModule(device[gpuID], shaderModule, nullptr);
         }
-        vkDestroyImageView(device[gpuID], depthStencil.view, nullptr);
-        vkDestroyImage(device[gpuID], depthStencil.image, nullptr);
-        vkFreeMemory(device[gpuID], depthStencil.mem, nullptr);
+
+        vkDestroyImageView(device[gpuID], depthStencil[gpuID].view,  nullptr);
+        vkDestroyImage(device[gpuID],     depthStencil[gpuID].image, nullptr);
+        vkFreeMemory(device[gpuID],       depthStencil[gpuID].mem,   nullptr);
 
         vkDestroyPipelineCache(device[gpuID], pipelineCache, nullptr);
     }
@@ -782,7 +795,7 @@ VulkanExampleBase::~VulkanExampleBase()
 
     for (int gpuID : totalDevices)
     {
-	    vkDestroyCommandPool(device[gpuID], cmdPool, nullptr);
+	    vkDestroyCommandPool(device[gpuID], cmdPool[gpuID], nullptr);
 
 	    vkDestroySemaphore(device[gpuID], semaphores.presentComplete, nullptr);
 	    vkDestroySemaphore(device[gpuID], semaphores.renderComplete, nullptr);
@@ -853,7 +866,6 @@ void VulkanExampleBase::initVulkan(bool enableValidation)
 		vkTools::exitFatal("Could not enumerate phyiscal devices : \n" + vkTools::errorString(err), "Fatal error");
 	}
 
-#ifdef MGPU
     
     int totalDevices[] = { 0, 1 };
     for (int gpuId : totalDevices)
@@ -872,6 +884,7 @@ void VulkanExampleBase::initVulkan(bool enableValidation)
         // So examples can check against them and see if a feature is actually supported
         vkGetPhysicalDeviceProperties(physicalDevice[gpuId], &deviceProperties);
         vkGetPhysicalDeviceFeatures(physicalDevice[gpuId], &deviceFeatures);
+
         // Gather physical device memory properties
         vkGetPhysicalDeviceMemoryProperties(physicalDevice[gpuId], &deviceMemoryProperties);
 
@@ -884,6 +897,7 @@ void VulkanExampleBase::initVulkan(bool enableValidation)
    
         // Create synchronization objects
         VkSemaphoreCreateInfo semaphoreCreateInfo = vkTools::initializers::semaphoreCreateInfo();
+        
         // Create a semaphore used to synchronize image presentation
         // Ensures that the image is displayed before we start submitting new commands to the queu
         VK_CHECK_RESULT(vkCreateSemaphore(device[gpuId], &semaphoreCreateInfo, nullptr, &semaphores.presentComplete));
@@ -897,55 +911,6 @@ void VulkanExampleBase::initVulkan(bool enableValidation)
     }
 
     swapChain.connect(instance, physicalDevice[0], device[0]);
-
-#else
-
-
-	// Note :
-	// This example will always use the first physical device reported,
-	// change the vector index if you have multiple Vulkan devices installed
-	// and want to use another one
-	physicalDevice = physicalDevices[0];
-
-	// Vulkan device creation
-	// This is handled by a separate class that gets a logical device representation
-	// and encapsulates functions related to a device
-	vulkanDevice = new vk::VulkanDevice(physicalDevice);
-	VK_CHECK_RESULT(vulkanDevice->createLogicalDevice(enabledFeatures));
-	device = vulkanDevice->logicalDevice;
-
-	// todo: remove
-	// Store properties (including limits) and features of the phyiscal device
-	// So examples can check against them and see if a feature is actually supported
-	vkGetPhysicalDeviceProperties(physicalDevice, &deviceProperties);
-	vkGetPhysicalDeviceFeatures(physicalDevice, &deviceFeatures);
-	// Gather physical device memory properties
-	vkGetPhysicalDeviceMemoryProperties(physicalDevice, &deviceMemoryProperties);
-
-	// Get a graphics queue from the device
-	vkGetDeviceQueue(device, vulkanDevice->queueFamilyIndices.graphics, 0, &queue);
-
-	// Find a suitable depth format
-	VkBool32 validDepthFormat = vkTools::getSupportedDepthFormat(physicalDevice, &depthFormat);
-	assert(validDepthFormat);
-
-	swapChain.connect(instance, physicalDevice, device);
-
-	// Create synchronization objects
-	VkSemaphoreCreateInfo semaphoreCreateInfo = vkTools::initializers::semaphoreCreateInfo();
-	// Create a semaphore used to synchronize image presentation
-	// Ensures that the image is displayed before we start submitting new commands to the queu
-	VK_CHECK_RESULT(vkCreateSemaphore(device, &semaphoreCreateInfo, nullptr, &semaphores.presentComplete));
-	// Create a semaphore used to synchronize command submission
-	// Ensures that the image is not presented until all commands have been sumbitted and executed
-	VK_CHECK_RESULT(vkCreateSemaphore(device, &semaphoreCreateInfo, nullptr, &semaphores.renderComplete));
-	// Create a semaphore used to synchronize command submission
-	// Ensures that the image is not presented until all commands for the text overlay have been sumbitted and executed
-	// Will be inserted after the render complete semaphore if the text overlay is enabled
-	VK_CHECK_RESULT(vkCreateSemaphore(device, &semaphoreCreateInfo, nullptr, &semaphores.textOverlayComplete));
-
-#endif
-
 
 	// Set up submit info structure
 	// Semaphores will stay the same during application lifetime
@@ -1562,8 +1527,8 @@ void VulkanExampleBase::createCommandPool()
 	cmdPoolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
 	cmdPoolInfo.queueFamilyIndex = swapChain.queueNodeIndex;
 	cmdPoolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
-	VK_CHECK_RESULT(vkCreateCommandPool(device[0], &cmdPoolInfo, nullptr, &cmdPool));
-    VK_CHECK_RESULT(vkCreateCommandPool(device[1], &cmdPoolInfo, nullptr, &cmdPool));
+	VK_CHECK_RESULT(vkCreateCommandPool(device[0], &cmdPoolInfo, nullptr, &cmdPool[0]));
+    VK_CHECK_RESULT(vkCreateCommandPool(device[1], &cmdPoolInfo, nullptr, &cmdPool[1]));
 }
 
 void VulkanExampleBase::setupDepthStencil()
@@ -1606,42 +1571,49 @@ void VulkanExampleBase::setupDepthStencil()
     int totalDevices[] = { 0, 1 };
     for (int gpuID : totalDevices)
     {
-	    VK_CHECK_RESULT(vkCreateImage(device[gpuID], &image, nullptr, &depthStencil.image));
-	    vkGetImageMemoryRequirements(device[gpuID], depthStencil.image, &memReqs);
+	    VK_CHECK_RESULT(vkCreateImage(device[gpuID], &image, nullptr, &depthStencil[gpuID].image));
+	    vkGetImageMemoryRequirements(device[gpuID], depthStencil[gpuID].image, &memReqs);
 	    mem_alloc.allocationSize = memReqs.size;
 	    mem_alloc.memoryTypeIndex = vulkanDevice[gpuID]->getMemoryType(memReqs.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-	    VK_CHECK_RESULT(vkAllocateMemory(device[gpuID], &mem_alloc, nullptr, &depthStencil.mem));
-	    VK_CHECK_RESULT(vkBindImageMemory(device[gpuID], depthStencil.image, depthStencil.mem, 0));
+	    VK_CHECK_RESULT(vkAllocateMemory(device[gpuID], &mem_alloc, nullptr, &depthStencil[gpuID].mem));
+	    VK_CHECK_RESULT(vkBindImageMemory(device[gpuID], depthStencil[gpuID].image, depthStencil[gpuID].mem, 0));
 
-	    depthStencilView.image = depthStencil.image;
-	    VK_CHECK_RESULT(vkCreateImageView(device[gpuID], &depthStencilView, nullptr, &depthStencil.view));
+	    depthStencilView.image = depthStencil[gpuID].image;
+	    VK_CHECK_RESULT(vkCreateImageView(device[gpuID], &depthStencilView, nullptr, &depthStencil[gpuID].view));
     }
 }
 
 void VulkanExampleBase::setupFrameBuffer()
 {
-	VkImageView attachments[2];
-
-	// Depth/Stencil attachment is the same for all frame buffers
-	attachments[1] = depthStencil.view;
-
-	VkFramebufferCreateInfo frameBufferCreateInfo = {};
-	frameBufferCreateInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
-	frameBufferCreateInfo.pNext = NULL;
-	frameBufferCreateInfo.renderPass = renderPass;
-	frameBufferCreateInfo.attachmentCount = 2;
-	frameBufferCreateInfo.pAttachments = attachments;
-	frameBufferCreateInfo.width = width;
-	frameBufferCreateInfo.height = height;
-	frameBufferCreateInfo.layers = 1;
-
-	// Create frame buffers for every swap chain image
-	frameBuffers.resize(swapChain.imageCount);
-	for (uint32_t i = 0; i < frameBuffers.size(); i++)
+	
+    // Create frame buffers for every swap chain image
+	//int totalDevices[] = { 0, 1 };
+    int totalDevices[] = { 0 };
+	for (int gpuID : totalDevices)
 	{
-		attachments[0] = swapChain.buffers[i].view;
-		VK_CHECK_RESULT(vkCreateFramebuffer(device[0], &frameBufferCreateInfo, nullptr, &frameBuffers[i]));
-        VK_CHECK_RESULT(vkCreateFramebuffer(device[1], &frameBufferCreateInfo, nullptr, &frameBuffers[i]));
+        VkImageView attachments[2];
+
+        // Depth/Stencil attachment is the same for all frame buffers
+        attachments[1] = depthStencil[gpuID].view;
+
+		for (uint32_t i = 0; i < frameBuffers[gpuID].size(); i++)
+		{
+			// FrameBuffers
+			frameBuffers[gpuID].resize(swapChain.imageCount);
+
+			VkFramebufferCreateInfo frameBufferCreateInfo = {};
+			frameBufferCreateInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+			frameBufferCreateInfo.pNext = NULL;
+			frameBufferCreateInfo.renderPass = renderPass[gpuID];
+			frameBufferCreateInfo.attachmentCount = 2;
+			frameBufferCreateInfo.pAttachments = attachments;
+			frameBufferCreateInfo.width = width;
+			frameBufferCreateInfo.height = height;
+			frameBufferCreateInfo.layers = 1;
+
+			attachments[0] = swapChain.buffers[i].view;
+			VK_CHECK_RESULT(vkCreateFramebuffer(device[gpuID], &frameBufferCreateInfo, nullptr, &frameBuffers[gpuID][i]));
+		}
 	}
 }
 
@@ -1714,8 +1686,8 @@ void VulkanExampleBase::setupRenderPass()
 	renderPassInfo.dependencyCount = static_cast<uint32_t>(dependencies.size());
 	renderPassInfo.pDependencies = dependencies.data();
 
-	VK_CHECK_RESULT(vkCreateRenderPass(device[0], &renderPassInfo, nullptr, &renderPass));
-    VK_CHECK_RESULT(vkCreateRenderPass(device[1], &renderPassInfo, nullptr, &renderPass));
+	VK_CHECK_RESULT(vkCreateRenderPass(device[0], &renderPassInfo, nullptr, &renderPass[0]));
+    VK_CHECK_RESULT(vkCreateRenderPass(device[1], &renderPassInfo, nullptr, &renderPass[1]));
 }
 
 void VulkanExampleBase::windowResize()
@@ -1736,18 +1708,18 @@ void VulkanExampleBase::windowResize()
     int totalDevices[] = { 0, 1 };
     for (int gpuID : totalDevices) 
     {
-        vkDestroyImageView(device[gpuID], depthStencil.view, nullptr);
-        vkDestroyImage(device[gpuID], depthStencil.image, nullptr);
-        vkFreeMemory(device[gpuID], depthStencil.mem, nullptr);
+        vkDestroyImageView(device[gpuID], depthStencil[gpuID].view, nullptr);
+        vkDestroyImage(device[gpuID],     depthStencil[gpuID].image, nullptr);
+        vkFreeMemory(device[gpuID],       depthStencil[gpuID].mem, nullptr);
     }
 
 	setupDepthStencil();
 	
     for (int gpuID : totalDevices)
     {
-        for (uint32_t i = 0; i < frameBuffers.size(); i++)
+        for (uint32_t i = 0; i < frameBuffers[gpuID].size(); i++)
         {
-            vkDestroyFramebuffer(device[gpuID], frameBuffers[i], nullptr);
+            vkDestroyFramebuffer(device[gpuID], frameBuffers[gpuID][i], nullptr);
         }
     }
 	setupFrameBuffer();

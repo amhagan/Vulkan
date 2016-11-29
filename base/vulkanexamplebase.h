@@ -115,19 +115,19 @@ protected:
 	// Depth format is selected during Vulkan initialization
 	VkFormat depthFormat;
 	// Command buffer pool
-	VkCommandPool cmdPool;
+	VkCommandPool cmdPool[2];
 	// Command buffer used for setup
-	VkCommandBuffer setupCmdBuffer = VK_NULL_HANDLE;
+	VkCommandBuffer setupCmdBuffer[2];
 	/** @brief Pipeline stages used to wait at for graphics queue submissions */
 	VkPipelineStageFlags submitPipelineStages = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
 	// Contains command buffers and semaphores to be presented to the queue
 	VkSubmitInfo submitInfo;
 	// Command buffers used for rendering
-	std::vector<VkCommandBuffer> drawCmdBuffers;
+	std::vector<VkCommandBuffer> drawCmdBuffers[2];
 	// Global render pass for frame buffer writes
-	VkRenderPass renderPass;
+	VkRenderPass renderPass[2];
 	// List of available frame buffers (same as number of swap chain images)
-	std::vector<VkFramebuffer>frameBuffers;
+	std::vector<VkFramebuffer> frameBuffers[2];
 	// Active frame buffer index
 	uint32_t currentBuffer = 0;
 	// Descriptor set pool
@@ -192,7 +192,7 @@ public:
 		VkImage image;
 		VkDeviceMemory mem;
 		VkImageView view;
-	} depthStencil;
+	} depthStencil[2];
 
 	// Gamepad state (only one pad supported)
 	struct
