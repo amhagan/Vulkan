@@ -108,7 +108,7 @@ protected:
 #endif
 
 	// Handle to the device graphics queue that command buffers are submitted to
-	VkQueue queue;
+	VkQueue queue[2];
 	// Color buffer format
 	VkFormat colorformat = VK_FORMAT_B8G8R8A8_UNORM;
 	// Depth buffer format

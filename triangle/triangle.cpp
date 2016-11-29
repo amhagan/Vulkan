@@ -122,7 +122,7 @@ public:
 	{
         int totalDevices[] = { 0, 1 };
         for (int gpuID : totalDevices)
-            {
+        {
 		    // Clean up used Vulkan resources 
 		    // Note: Inherited destructor cleans up resources stored in base class
 		    vkDestroyPipeline(device[gpuID], pipeline, nullptr);
@@ -250,7 +250,8 @@ public:
 
 		VK_CHECK_RESULT(vkEndCommandBuffer(commandBuffer));
 
-        int totalDevices[] = { 0, 1 };
+        //int totalDevices[] = { 0, 1 };
+        int totalDevices[] = { 0 };
         for (int gpuID : totalDevices)
         {
 		    VkSubmitInfo submitInfo = {};
@@ -266,7 +267,7 @@ public:
 		    VK_CHECK_RESULT(vkCreateFence(device[gpuID], &fenceCreateInfo, nullptr, &fence));
 
 		    // Submit to the queue
-		    VK_CHECK_RESULT(vkQueueSubmit(queue, 1, &submitInfo, fence));
+		    VK_CHECK_RESULT(vkQueueSubmit(queue[gpuID], 1, &submitInfo, fence));
 		    // Wait for the fence to signal that command buffer has finished executing
 		    VK_CHECK_RESULT(vkWaitForFences(device[gpuID], 1, &fence, VK_TRUE, DEFAULT_FENCE_TIMEOUT));
 
@@ -329,21 +330,21 @@ public:
 			vkCmdSetScissor(drawCmdBuffers[i], 0, 1, &scissor);
 
 			// Bind descriptor sets describing shader binding points
-			vkCmdBindDescriptorSets(drawCmdBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, &descriptorSet, 0, nullptr);
+			//vkCmdBindDescriptorSets(drawCmdBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, &descriptorSet, 0, nullptr);
 
 			// Bind the rendering pipeline
 			// The pipeline (state object) contains all states of the rendering pipeline, binding it will set all the states specified at pipeline creation time
-			vkCmdBindPipeline(drawCmdBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
+			//vkCmdBindPipeline(drawCmdBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
 
 			// Bind triangle vertex buffer (contains position and colors)
 			VkDeviceSize offsets[1] = { 0 };
-			vkCmdBindVertexBuffers(drawCmdBuffers[i], VERTEX_BUFFER_BIND_ID, 1, &vertices.buffer, offsets);
+			//vkCmdBindVertexBuffers(drawCmdBuffers[i], VERTEX_BUFFER_BIND_ID, 1, &vertices.buffer, offsets);
 
 			// Bind triangle index buffer
-			vkCmdBindIndexBuffer(drawCmdBuffers[i], indices.buffer, 0, VK_INDEX_TYPE_UINT32);
+			//vkCmdBindIndexBuffer(drawCmdBuffers[i], indices.buffer, 0, VK_INDEX_TYPE_UINT32);
 
 			// Draw indexed triangle
-			vkCmdDrawIndexed(drawCmdBuffers[i], indices.count, 1, 0, 0, 1);
+			//vkCmdDrawIndexed(drawCmdBuffers[i], indices.count, 1, 0, 0, 1);
 
 			vkCmdEndRenderPass(drawCmdBuffers[i]);
 
@@ -359,15 +360,13 @@ public:
 		// Get next image in the swap chain (back/front buffer)
 		VK_CHECK_RESULT(swapChain.acquireNextImage(presentCompleteSemaphore, &currentBuffer));
 
-        int totalDevices[] = { 0, 1 };
+        // int totalDevices[] = { 0, 1 };
+        int totalDevices[] = { 0 };
         for (int gpuID : totalDevices)
         {
 		    // Use a fence to wait until the command buffer has finished execution before using it again
-		    VK_CHECK_RESULT(vkWaitForFences(device[0], 1, &waitFences[currentBuffer], VK_TRUE, UINT64_MAX));
-		    VK_CHECK_RESULT(vkResetFences(device[0], 1, &waitFences[currentBuffer]));
-
-            VK_CHECK_RESULT(vkWaitForFences(device[1], 1, &waitFences[currentBuffer], VK_TRUE, UINT64_MAX));
-            VK_CHECK_RESULT(vkResetFences(device[1], 1, &waitFences[currentBuffer]));
+		    VK_CHECK_RESULT(vkWaitForFences(device[gpuID], 1, &waitFences[currentBuffer], VK_TRUE, UINT64_MAX));
+		    VK_CHECK_RESULT(vkResetFences(device[gpuID], 1, &waitFences[currentBuffer]));
         }
 
 		// Pipeline stage at which the queue submission will wait (via pWaitSemaphores)
@@ -384,12 +383,12 @@ public:
 		submitInfo.commandBufferCount = 1;												// One command buffer
 
 		// Submit to the graphics queue passing a wait fence
-		VK_CHECK_RESULT(vkQueueSubmit(queue, 1, &submitInfo, waitFences[currentBuffer]));
+		VK_CHECK_RESULT(vkQueueSubmit(queue[0], 1, &submitInfo, waitFences[currentBuffer]));
 		
 		// Present the current buffer to the swap chain
 		// Pass the semaphore signaled by the command buffer submission from the submit info as the wait semaphore for swap chain presentation
 		// This ensures that the image is not presented to the windowing system until all commands have been submitted
-		VK_CHECK_RESULT(swapChain.queuePresent(queue, currentBuffer, renderCompleteSemaphore));
+		VK_CHECK_RESULT(swapChain.queuePresent(queue[0], currentBuffer, renderCompleteSemaphore));
 	}
 
 	// Prepare vertex and index buffers for an indexed triangle
@@ -456,7 +455,8 @@ public:
 			// Buffer is used as the copy source
 			vertexBufferInfo.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
 
-            int totalDevices[] = { 0, 1 };
+            //int totalDevices[] = { 0, 1 };
+            int totalDevices[] = { 0 };
             for (int gpuID : totalDevices)
             {
 			    // Create a host-visible buffer to copy the vertex data to (staging buffer)
@@ -684,7 +684,8 @@ public:
 		allocInfo.descriptorSetCount = 1;
 		allocInfo.pSetLayouts = &descriptorSetLayout;
 
-        int totalDevices[] = { 0, 1 };
+        //int totalDevices[] = { 0, 1 };
+        int totalDevices[] = { 0 };
         for (int gpuID : totalDevices)
         {
 		    VK_CHECK_RESULT(vkAllocateDescriptorSets(device[gpuID], &allocInfo, &descriptorSet));
@@ -1064,12 +1065,12 @@ public:
 	{
 		VulkanExampleBase::prepare();
 		prepareSynchronizationPrimitives();
-		prepareVertices(USE_STAGING);
-		prepareUniformBuffers();
-		setupDescriptorSetLayout();
-		preparePipelines();
-		setupDescriptorPool();
-		setupDescriptorSet();
+		// prepareVertices(USE_STAGING);
+		// prepareUniformBuffers();
+		// setupDescriptorSetLayout();
+		// preparePipelines();
+		//setupDescriptorPool();
+		//setupDescriptorSet();
 		buildCommandBuffers();
 		prepared = true;
 	}
