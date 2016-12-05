@@ -86,7 +86,7 @@ public:
 	// While in OpenGL every state can be changed at (almost) any time, Vulkan requires to layout the graphics (and compute) pipeline states upfront
 	// So for each combination of non-dynamic pipeline states you need a new pipeline (there are a few exceptions to this not discussed here)
 	// Even though this adds a new dimension of planing ahead, it's a great opportunity for performance optimizations by the driver
-	VkPipeline pipeline;
+	VkPipeline pipeline[2];
 
 	// The descriptor set layout describes the shader binding layout (without actually referencing descriptor)
 	// Like the pipeline layout it's pretty much a blueprint and can be used with different descriptor sets as long as their layout matches
@@ -125,7 +125,7 @@ public:
         {
 		    // Clean up used Vulkan resources 
 		    // Note: Inherited destructor cleans up resources stored in base class
-		    vkDestroyPipeline(device[gpuID], pipeline, nullptr);
+		    vkDestroyPipeline(device[gpuID], pipeline[gpuID], nullptr);
 
 		    vkDestroyPipelineLayout(device[gpuID], pipelineLayout, nullptr);
 		    vkDestroyDescriptorSetLayout(device[gpuID], descriptorSetLayout, nullptr);
@@ -205,28 +205,24 @@ public:
 
 	// Get a new command buffer from the command pool
 	// If begin is true, the command buffer is also started so we can start adding commands
-	VkCommandBuffer getCommandBuffer(bool begin)
+	VkCommandBuffer getCommandBuffer(int gpuID, bool begin)
 	{
 		VkCommandBuffer cmdBuffer;
 
-		int totalDevices[] = { 0, 1 };
-		for (int gpuID : totalDevices)
-		{
-			VkCommandBufferAllocateInfo cmdBufAllocateInfo = {};
-			cmdBufAllocateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-			cmdBufAllocateInfo.commandPool = cmdPool[gpuID];
-			cmdBufAllocateInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-			cmdBufAllocateInfo.commandBufferCount = 1;
+		VkCommandBufferAllocateInfo cmdBufAllocateInfo = {};
+		cmdBufAllocateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+		cmdBufAllocateInfo.commandPool = cmdPool[gpuID];
+		cmdBufAllocateInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+		cmdBufAllocateInfo.commandBufferCount = 1;
 	
-		    VK_CHECK_RESULT(vkAllocateCommandBuffers(device[gpuID], &cmdBufAllocateInfo, &cmdBuffer));
+		VK_CHECK_RESULT(vkAllocateCommandBuffers(device[gpuID], &cmdBufAllocateInfo, &cmdBuffer));
 
-		    // If requested, also start the new command buffer
-		    if (begin)
-		    {
-			    VkCommandBufferBeginInfo cmdBufInfo = vkTools::initializers::commandBufferBeginInfo();
-			    VK_CHECK_RESULT(vkBeginCommandBuffer(cmdBuffer, &cmdBufInfo));
-		    }
-        }
+		// If requested, also start the new command buffer
+		if (begin)
+		{
+			VkCommandBufferBeginInfo cmdBufInfo = vkTools::initializers::commandBufferBeginInfo();
+			VK_CHECK_RESULT(vkBeginCommandBuffer(cmdBuffer, &cmdBufInfo));
+		}
 
 		return cmdBuffer;
 	}
@@ -390,34 +386,66 @@ public:
         // Buffer copies have to be submitted to a queue, so we need a command buffer for them
         // Note: Some devices offer a dedicated transfer queue (with only the transfer bit set) that may be faster when doing lots of copies
         // Source
-        VkImageBlit imageBlit{};
-        imageBlit.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-        imageBlit.srcSubresource.layerCount = 1;
-        imageBlit.srcSubresource.mipLevel = 0;
-        imageBlit.srcOffsets[1].x = int32_t(width);
-        imageBlit.srcOffsets[1].y = int32_t(height);
-        imageBlit.srcOffsets[1].z = 1;
+        //VkImageBlit imageBlit{};
+        //imageBlit.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        //imageBlit.srcSubresource.layerCount = 1;
+        //imageBlit.srcSubresource.mipLevel = 0;
+        //imageBlit.srcOffsets[1].x = int32_t(width);
+        //imageBlit.srcOffsets[1].y = int32_t(height);
+        //imageBlit.srcOffsets[1].z = 1;
 
-        // Destination
-        imageBlit.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-        imageBlit.dstSubresource.layerCount = 1;
-        imageBlit.dstSubresource.mipLevel = 0;
-        imageBlit.dstOffsets[1].x = int32_t(width);
-        imageBlit.dstOffsets[1].y = int32_t(height);
-        imageBlit.dstOffsets[1].z = 1;
+        //// Destination
+        //imageBlit.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        //imageBlit.dstSubresource.layerCount = 1;
+        //imageBlit.dstSubresource.mipLevel = 0;
+        //imageBlit.dstOffsets[1].x = int32_t(width);
+        //imageBlit.dstOffsets[1].y = int32_t(height);
+        //imageBlit.dstOffsets[1].z = 1;
 
-        //VkCommandBuffer copyCmd = VulkanExampleBase::createCommandBuffer(0, VK_COMMAND_BUFFER_LEVEL_PRIMARY, false);
+        ////VkCommandBuffer copyCmd = VulkanExampleBase::createCommandBuffer(0, VK_COMMAND_BUFFER_LEVEL_PRIMARY, false);
 
-        //vkCmdBlitImage(copyCmd,
-        //            swapChain[0].buffers[0].image,
-        //            VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-        //            swapChain[0].buffers[0].image,
-        //            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-        //            1,
-        //            &imageBlit,
-        //            VK_FILTER_LINEAR);
+        //// vkCmdCopyImage
+        ////
+        ////vkCmdBlitImage(copyCmd,
+        ////            swapChain[0].buffers[0].image,
+        ////            VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+        ////            swapChain[0].buffers[0].image,
+        ////            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+        ////            1,
+        ////            &imageBlit,
+        ////            VK_FILTER_LINEAR);
 
-        //vkFreeCommandBuffers(device[0], cmdPool[0], 1, &copyCmd);
+        ////vkFreeCommandBuffers(device[0], cmdPool[0], 1, &copyCmd);
+
+
+        // Do a image copy to part of the dst image - checks should stay small
+        VkImageCopy cregion;
+        cregion.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        cregion.srcSubresource.mipLevel = 0;
+        cregion.srcSubresource.baseArrayLayer = 0;
+        cregion.srcSubresource.layerCount = 1;
+        cregion.srcOffset.x = 0;
+        cregion.srcOffset.y = 0;
+        cregion.srcOffset.z = 0;
+
+        cregion.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        cregion.dstSubresource.mipLevel = 0;
+        cregion.dstSubresource.baseArrayLayer = 0;
+        cregion.dstSubresource.layerCount = 1;
+        cregion.dstOffset.x = 0;
+        cregion.dstOffset.y = height/2;
+        cregion.dstOffset.z = 0;
+        cregion.extent.width = width;
+        cregion.extent.height = height;
+        cregion.extent.depth = 1;
+
+        VkCommandBuffer copyCmd = VulkanExampleBase::createCommandBuffer(0, VK_COMMAND_BUFFER_LEVEL_PRIMARY, true);
+
+        vkCmdCopyImage(copyCmd,
+            swapChain[0].buffers[0].image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+            swapChain[0].buffers[1].image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+            1, &cregion);
+
 
         ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -488,6 +516,7 @@ public:
 			VkBufferCreateInfo vertexBufferInfo = {};
 			vertexBufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
 			vertexBufferInfo.size = vertexBufferSize;
+
 			// Buffer is used as the copy source
 			vertexBufferInfo.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
 
@@ -498,11 +527,13 @@ public:
 			    VK_CHECK_RESULT(vkCreateBuffer(device[gpuID], &vertexBufferInfo, nullptr, &stagingBuffers.vertices.buffer));
 			    vkGetBufferMemoryRequirements(device[gpuID], stagingBuffers.vertices.buffer, &memReqs);
 			    memAlloc.allocationSize = memReqs.size;
+
 			    // Request a host visible memory type that can be used to copy our data do
 			    // Also request it to be coherent, so that writes are visible to the GPU right after unmapping the buffer
 			    memAlloc.memoryTypeIndex = getMemoryTypeIndex(memReqs.memoryTypeBits, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
 			    VK_CHECK_RESULT(vkAllocateMemory(device[gpuID], &memAlloc, nullptr, &stagingBuffers.vertices.memory));
-			    // Map and copy
+			   
+                 // Map and copy
 			    VK_CHECK_RESULT(vkMapMemory(device[gpuID], stagingBuffers.vertices.memory, 0, memAlloc.allocationSize, 0, &data));
 			    memcpy(data, vertexBuffer.data(), vertexBufferSize);
 			    vkUnmapMemory(device[gpuID], stagingBuffers.vertices.memory);
@@ -549,7 +580,7 @@ public:
 
 			    // Buffer copies have to be submitted to a queue, so we need a command buffer for them
 			    // Note: Some devices offer a dedicated transfer queue (with only the transfer bit set) that may be faster when doing lots of copies
-			    VkCommandBuffer copyCmd = getCommandBuffer(true);
+			    VkCommandBuffer copyCmd = getCommandBuffer(gpuID, true);
 
 			    // Put buffer region copies into command buffer
 			    VkBufferCopy copyRegion = {};
@@ -557,6 +588,7 @@ public:
 			    // Vertex buffer
 			    copyRegion.size = vertexBufferSize;
 			    vkCmdCopyBuffer(copyCmd, stagingBuffers.vertices.buffer, vertices.buffer, 1, &copyRegion);
+
 			    // Index buffer
 			    copyRegion.size = indexBufferSize;
 			    vkCmdCopyBuffer(copyCmd, stagingBuffers.indices.buffer, indices.buffer,	1, &copyRegion);
@@ -626,11 +658,13 @@ public:
 		//	layout (location = 0) in vec3 inPos;
 		//	layout (location = 1) in vec3 inColor;
 		vertices.inputAttributes.resize(2);
+
 		// Attribute location 0: Position
 		vertices.inputAttributes[0].binding = VERTEX_BUFFER_BIND_ID;
 		vertices.inputAttributes[0].location = 0;
 		vertices.inputAttributes[0].format = VK_FORMAT_R32G32B32_SFLOAT;
 		vertices.inputAttributes[0].offset = offsetof(Vertex, position);
+
 		// Attribute location 1: Color
 		vertices.inputAttributes[1].binding = VERTEX_BUFFER_BIND_ID;
 		vertices.inputAttributes[1].location = 1;
@@ -1027,8 +1061,8 @@ public:
 		pipelineCreateInfo.pDynamicState = &dynamicState;
 
 		// Create rendering pipeline using the specified states
-		VK_CHECK_RESULT(vkCreateGraphicsPipelines(device[0], pipelineCache, 1, &pipelineCreateInfo, nullptr, &pipeline));
-        VK_CHECK_RESULT(vkCreateGraphicsPipelines(device[1], pipelineCache, 1, &pipelineCreateInfo, nullptr, &pipeline));
+		VK_CHECK_RESULT(vkCreateGraphicsPipelines(device[0], pipelineCache, 1, &pipelineCreateInfo, nullptr, &pipeline[0]));
+        VK_CHECK_RESULT(vkCreateGraphicsPipelines(device[1], pipelineCache, 1, &pipelineCreateInfo, nullptr, &pipeline[1]));
 	}
 
 	void prepareUniformBuffers()
@@ -1107,10 +1141,10 @@ public:
 	{
 		VulkanExampleBase::prepare();
 		prepareSynchronizationPrimitives();
-		// prepareVertices(USE_STAGING);
+		prepareVertices(USE_STAGING);
 		// prepareUniformBuffers();
 		// setupDescriptorSetLayout();
-		// preparePipelines();
+		preparePipelines();
 		//setupDescriptorPool();
 		//setupDescriptorSet();
 		

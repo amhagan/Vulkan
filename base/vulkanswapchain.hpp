@@ -358,7 +358,7 @@ public:
 		swapchainCI.imageFormat = colorFormat;
 		swapchainCI.imageColorSpace = colorSpace;
 		swapchainCI.imageExtent = { swapchainExtent.width, swapchainExtent.height };
-		swapchainCI.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+		swapchainCI.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
 		swapchainCI.preTransform = (VkSurfaceTransformFlagBitsKHR)preTransform;
 		swapchainCI.imageArrayLayers = 1;
 		swapchainCI.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
@@ -366,6 +366,7 @@ public:
 		swapchainCI.pQueueFamilyIndices = NULL;
 		swapchainCI.presentMode = swapchainPresentMode;
 		swapchainCI.oldSwapchain = oldSwapchain;
+
 		// Setting clipped to VK_TRUE allows the implementation to discard rendering outside of the surface area
 		swapchainCI.clipped = VK_TRUE;
 		swapchainCI.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
