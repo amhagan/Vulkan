@@ -131,7 +131,7 @@ protected:
 	// Active frame buffer index
 	uint32_t currentBuffer = 0;
 	// Descriptor set pool
-	VkDescriptorPool descriptorPool = VK_NULL_HANDLE;
+	VkDescriptorPool descriptorPool[2];
 	// List of shader modules created (stored for cleanup)
 	std::vector<VkShaderModule> shaderModules;
 	// Pipeline cache object
@@ -302,7 +302,7 @@ public:
 	virtual void prepare();
 
 	// Load a SPIR-V shader
-	VkPipelineShaderStageCreateInfo loadShader(std::string fileName, VkShaderStageFlagBits stage);
+	VkPipelineShaderStageCreateInfo loadShader(int gpuID, std::string fileName, VkShaderStageFlagBits stage);
 	
 	// Create a buffer, fill it with data (if != NULL) and bind buffer memory
 	VkBool32 createBuffer(

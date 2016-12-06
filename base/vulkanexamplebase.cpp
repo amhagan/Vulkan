@@ -257,7 +257,7 @@ void VulkanExampleBase::prepare()
 	//}
 }
 
-VkPipelineShaderStageCreateInfo VulkanExampleBase::loadShader(std::string fileName, VkShaderStageFlagBits stage)
+VkPipelineShaderStageCreateInfo VulkanExampleBase::loadShader(int gpuID, std::string fileName, VkShaderStageFlagBits stage)
 {
 	VkPipelineShaderStageCreateInfo shaderStage = {};
 	shaderStage.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
@@ -265,8 +265,7 @@ VkPipelineShaderStageCreateInfo VulkanExampleBase::loadShader(std::string fileNa
 #if defined(__ANDROID__)
 	shaderStage.module = vkTools::loadShader(androidApp->activity->assetManager, fileName.c_str(), device, stage);
 #else
-	shaderStage.module = vkTools::loadShader(fileName.c_str(), device[0], stage);
-    shaderStage.module = vkTools::loadShader(fileName.c_str(), device[1], stage);
+	shaderStage.module = vkTools::loadShader(fileName.c_str(), device[gpuID], stage);
 #endif
 	shaderStage.pName = "main"; // todo : make param
 	assert(shaderStage.module != NULL);
@@ -755,7 +754,7 @@ VulkanExampleBase::~VulkanExampleBase()
 
 	    if (descriptorPool != VK_NULL_HANDLE)
 	    {
-		    vkDestroyDescriptorPool(device[gpuID], descriptorPool, nullptr);
+		    vkDestroyDescriptorPool(device[gpuID], descriptorPool[gpuID], nullptr);
 	    }
 	    if (setupCmdBuffer != VK_NULL_HANDLE)
 	    {

@@ -58,7 +58,7 @@ public:
 		VkDeviceMemory memory;		
 		VkBuffer buffer;			
 		VkDescriptorBufferInfo descriptor;
-	}  uniformDataVS;
+	}  uniformDataVS[2];
 
 	// For simplicity we use the same uniform block layout as in the shader:
 	//
@@ -80,7 +80,7 @@ public:
 	// The pipeline layout is used by a pipline to access the descriptor sets 
 	// It defines interface (without binding any actual data) between the shader stages used by the pipeline and the shader resources
 	// A pipeline layout can be shared among multiple pipelines as long as their interfaces match
-	VkPipelineLayout pipelineLayout;
+	VkPipelineLayout pipelineLayout[2];
 
 	// Pipelines (often called "pipeline state objects") are used to bake all states that affect a pipeline
 	// While in OpenGL every state can be changed at (almost) any time, Vulkan requires to layout the graphics (and compute) pipeline states upfront
@@ -127,7 +127,7 @@ public:
 		    // Note: Inherited destructor cleans up resources stored in base class
 		    vkDestroyPipeline(device[gpuID], pipeline[gpuID], nullptr);
 
-		    vkDestroyPipelineLayout(device[gpuID], pipelineLayout, nullptr);
+		    vkDestroyPipelineLayout(device[gpuID], pipelineLayout[gpuID], nullptr);
 		    vkDestroyDescriptorSetLayout(device[gpuID], descriptorSetLayout, nullptr);
 
 		    vkDestroyBuffer(device[gpuID], vertices.buffer, nullptr);
@@ -136,8 +136,8 @@ public:
 		    vkDestroyBuffer(device[gpuID], indices.buffer, nullptr);
 		    vkFreeMemory(device[gpuID], indices.memory, nullptr);
 
-		    vkDestroyBuffer(device[gpuID], uniformDataVS.buffer, nullptr);
-		    vkFreeMemory(device[gpuID], uniformDataVS.memory, nullptr);
+		    vkDestroyBuffer(device[gpuID], uniformDataVS[gpuID].buffer, nullptr);
+		    vkFreeMemory(device[gpuID], uniformDataVS[gpuID].memory, nullptr);
 
 		    vkDestroySemaphore(device[gpuID], presentCompleteSemaphore[gpuID], nullptr);
 		    vkDestroySemaphore(device[gpuID], renderCompleteSemaphore[gpuID], nullptr);
@@ -227,47 +227,43 @@ public:
 		return cmdBuffer;
 	}
 
-	// End the command buffer and submit it to the queue
-	// Uses a fence to ensure command buffer has finished executing before deleting it
-	void flushCommandBuffer(VkCommandBuffer commandBuffer)
-	{
-		assert(commandBuffer != VK_NULL_HANDLE);
+    // End the command buffer and submit it to the queue
+    // Uses a fence to ensure command buffer has finished executing before deleting it
+    void flushCommandBuffer(int gpuID, VkCommandBuffer commandBuffer)
+    {
+        assert(commandBuffer != VK_NULL_HANDLE);
 
-		VK_CHECK_RESULT(vkEndCommandBuffer(commandBuffer));
+        VK_CHECK_RESULT(vkEndCommandBuffer(commandBuffer));
 
-        int totalDevices[] = { 0, 1 };
-        for (int gpuID : totalDevices)
-        {
-		    VkSubmitInfo submitInfo = {};
-		    submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-		    submitInfo.commandBufferCount = 1;
-		    submitInfo.pCommandBuffers = &commandBuffer;
+        VkSubmitInfo submitInfo = {};
+        submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+        submitInfo.commandBufferCount = 1;
+        submitInfo.pCommandBuffers = &commandBuffer;
 
-		    // Create fence to ensure that the command buffer has finished executing
-		    VkFenceCreateInfo fenceCreateInfo = {};
-		    fenceCreateInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
-		    fenceCreateInfo.flags = 0;
-		    VkFence fence;
-		    VK_CHECK_RESULT(vkCreateFence(device[gpuID], &fenceCreateInfo, nullptr, &fence));
+        // Create fence to ensure that the command buffer has finished executing
+        VkFenceCreateInfo fenceCreateInfo = {};
+        fenceCreateInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+        fenceCreateInfo.flags = 0;
+        VkFence fence;
+        VK_CHECK_RESULT(vkCreateFence(device[gpuID], &fenceCreateInfo, nullptr, &fence));
 
-		    // Submit to the queue
-		    VK_CHECK_RESULT(vkQueueSubmit(queue[gpuID], 1, &submitInfo, fence));
-		    // Wait for the fence to signal that command buffer has finished executing
-		    VK_CHECK_RESULT(vkWaitForFences(device[gpuID], 1, &fence, VK_TRUE, DEFAULT_FENCE_TIMEOUT));
+        // Submit to the queue
+        VK_CHECK_RESULT(vkQueueSubmit(queue[gpuID], 1, &submitInfo, fence));
+        // Wait for the fence to signal that command buffer has finished executing
+        VK_CHECK_RESULT(vkWaitForFences(device[gpuID], 1, &fence, VK_TRUE, DEFAULT_FENCE_TIMEOUT));
 
-		    vkDestroyFence(device[gpuID], fence, nullptr);
-		    vkFreeCommandBuffers(device[gpuID], cmdPool[gpuID], 1, &commandBuffer);
-        }
-	}
+        vkDestroyFence(device[gpuID], fence, nullptr);
+        vkFreeCommandBuffers(device[gpuID], cmdPool[gpuID], 1, &commandBuffer);
+    }
 
-	// Build separate command buffers for every framebuffer image
-	// Unlike in OpenGL all rendering commands are recorded once into command buffers that are then resubmitted to the queue
-	// This allows to generate work upfront and from multiple threads, one of the biggest advantages of Vulkan
-	void buildCommandBuffers(int gpuId)
-	{
-		VkCommandBufferBeginInfo cmdBufInfo = {};
-		cmdBufInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-		cmdBufInfo.pNext = nullptr;
+    // Build separate command buffers for every framebuffer image
+    // Unlike in OpenGL all rendering commands are recorded once into command buffers that are then resubmitted to the queue
+    // This allows to generate work upfront and from multiple threads, one of the biggest advantages of Vulkan
+    void buildCommandBuffers(int gpuId)
+    {
+	    VkCommandBufferBeginInfo cmdBufInfo = {};
+	    cmdBufInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+	    cmdBufInfo.pNext = nullptr;
 
 		// Set clear values for all framebuffer attachments with loadOp set to clear
 		// We use two attachments (color and depth) that are cleared at the start of the subpass and as such we need to set clear values for both
@@ -314,21 +310,21 @@ public:
 			vkCmdSetScissor(drawCmdBuffers[gpuId][i], 0, 1, &scissor);
 
 			// Bind descriptor sets describing shader binding points
-			//vkCmdBindDescriptorSets(drawCmdBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, &descriptorSet, 0, nullptr);
+			vkCmdBindDescriptorSets(drawCmdBuffers[gpuId][i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout[gpuId], 0, 1, &descriptorSet, 0, nullptr);
 
 			// Bind the rendering pipeline
 			// The pipeline (state object) contains all states of the rendering pipeline, binding it will set all the states specified at pipeline creation time
-			//vkCmdBindPipeline(drawCmdBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
+			//vkCmdBindPipeline(drawCmdBuffers[gpuId][i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
 
 			// Bind triangle vertex buffer (contains position and colors)
 			VkDeviceSize offsets[1] = { 0 };
-			//vkCmdBindVertexBuffers(drawCmdBuffers[i], VERTEX_BUFFER_BIND_ID, 1, &vertices.buffer, offsets);
+			//vkCmdBindVertexBuffers(drawCmdBuffers[gpuId][i], VERTEX_BUFFER_BIND_ID, 1, &vertices.buffer, offsets);
 
 			// Bind triangle index buffer
-			//vkCmdBindIndexBuffer(drawCmdBuffers[i], indices.buffer, 0, VK_INDEX_TYPE_UINT32);
+			//vkCmdBindIndexBuffer(drawCmdBuffers[gpuId][i], indices.buffer, 0, VK_INDEX_TYPE_UINT32);
 
 			// Draw indexed triangle
-			//vkCmdDrawIndexed(drawCmdBuffers[i], indices.count, 1, 0, 0, 1);
+			//vkCmdDrawIndexed(drawCmdBuffers[gpuId][i], indices.count, 1, 0, 0, 1);
 
 			vkCmdEndRenderPass(drawCmdBuffers[gpuId][i]);
 
@@ -341,14 +337,13 @@ public:
 
 	void draw()
 	{
-
         // Get next image in the swap chain (back/front buffer)
         VK_CHECK_RESULT(swapChain[0].acquireNextImage(presentCompleteSemaphore[0], &currentBuffer));
 
         int totalDevices[] = { 0,1 };
         for (int gpuID : totalDevices)
         {       
-        
+
             // Use a fence to wait until the command buffer has finished execution before using it again
             VK_CHECK_RESULT(vkWaitForFences(device[gpuID], 1, &waitFences[gpuID][currentBuffer], VK_TRUE, UINT64_MAX));
             VK_CHECK_RESULT(vkResetFences(device[gpuID], 1, &waitFences[gpuID][currentBuffer]));
@@ -379,6 +374,7 @@ public:
 
             // Submit to the graphics queue passing a wait fence
             VK_CHECK_RESULT(vkQueueSubmit(queue[gpuID], 1, &submitInfo, waitFences[gpuID][currentBuffer]));
+           
         }
 
         ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -418,33 +414,33 @@ public:
         ////vkFreeCommandBuffers(device[0], cmdPool[0], 1, &copyCmd);
 
 
-        // Do a image copy to part of the dst image - checks should stay small
-        VkImageCopy cregion;
-        cregion.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-        cregion.srcSubresource.mipLevel = 0;
-        cregion.srcSubresource.baseArrayLayer = 0;
-        cregion.srcSubresource.layerCount = 1;
-        cregion.srcOffset.x = 0;
-        cregion.srcOffset.y = 0;
-        cregion.srcOffset.z = 0;
+        //// Do a image copy to part of the dst image - checks should stay small
+        //VkImageCopy cregion;
+        //cregion.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        //cregion.srcSubresource.mipLevel = 0;
+        //cregion.srcSubresource.baseArrayLayer = 0;
+        //cregion.srcSubresource.layerCount = 1;
+        //cregion.srcOffset.x = 0;
+        //cregion.srcOffset.y = 0;
+        //cregion.srcOffset.z = 0;
 
-        cregion.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-        cregion.dstSubresource.mipLevel = 0;
-        cregion.dstSubresource.baseArrayLayer = 0;
-        cregion.dstSubresource.layerCount = 1;
-        cregion.dstOffset.x = 0;
-        cregion.dstOffset.y = height/2;
-        cregion.dstOffset.z = 0;
-        cregion.extent.width = width;
-        cregion.extent.height = height;
-        cregion.extent.depth = 1;
+        //cregion.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        //cregion.dstSubresource.mipLevel = 0;
+        //cregion.dstSubresource.baseArrayLayer = 0;
+        //cregion.dstSubresource.layerCount = 1;
+        //cregion.dstOffset.x = 0;
+        //cregion.dstOffset.y = height/2;
+        //cregion.dstOffset.z = 0;
+        //cregion.extent.width = width;
+        //cregion.extent.height = height;
+        //cregion.extent.depth = 1;
 
-        VkCommandBuffer copyCmd = VulkanExampleBase::createCommandBuffer(0, VK_COMMAND_BUFFER_LEVEL_PRIMARY, true);
+        //VkCommandBuffer copyCmd = VulkanExampleBase::createCommandBuffer(0, VK_COMMAND_BUFFER_LEVEL_PRIMARY, true);
 
-        vkCmdCopyImage(copyCmd,
-            swapChain[0].buffers[0].image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-            swapChain[0].buffers[1].image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-            1, &cregion);
+        //vkCmdCopyImage(copyCmd,
+        //    swapChain[0].buffers[0].image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+        //    swapChain[0].buffers[1].image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+        //    1, &cregion);
 
 
         ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -453,6 +449,7 @@ public:
         // Pass the semaphore signaled by the command buffer submission from the submit info as the wait semaphore for swap chain presentation
         // This ensures that the image is not presented to the windowing system until all commands have been submitted
         VK_CHECK_RESULT(swapChain[0].queuePresent(queue[0], currentBuffer, VK_NULL_HANDLE));
+        //VK_CHECK_RESULT(swapChain[1].queuePresent(queue[1], currentBuffer, VK_NULL_HANDLE));
 	}
 
 	// Prepare vertex and index buffers for an indexed triangle
@@ -594,7 +591,7 @@ public:
 			    vkCmdCopyBuffer(copyCmd, stagingBuffers.indices.buffer, indices.buffer,	1, &copyRegion);
 
 			    // Flushing the command buffer will also submit it to the queue and uses a fence to ensure that all commands have been executed before returning
-			    flushCommandBuffer(copyCmd);
+			    flushCommandBuffer(gpuID, copyCmd);
 
 			    // Destroy staging buffers
 			    // Note: Staging buffer must not be deleted before the copies have been submitted and executed
@@ -703,8 +700,8 @@ public:
 		// Set the max. number of descriptor sets that can be requested from this pool (requesting beyond this limit will result in an error)
 		descriptorPoolInfo.maxSets = 1;
 
-		VK_CHECK_RESULT(vkCreateDescriptorPool(device[0], &descriptorPoolInfo, nullptr, &descriptorPool));
-        VK_CHECK_RESULT(vkCreateDescriptorPool(device[1], &descriptorPoolInfo, nullptr, &descriptorPool));
+		VK_CHECK_RESULT(vkCreateDescriptorPool(device[0], &descriptorPoolInfo, nullptr, &descriptorPool[0]));
+        VK_CHECK_RESULT(vkCreateDescriptorPool(device[1], &descriptorPoolInfo, nullptr, &descriptorPool[1]));
 	}
 
 	void setupDescriptorSetLayout()
@@ -740,40 +737,41 @@ public:
 		    pPipelineLayoutCreateInfo.setLayoutCount = 1;
 		    pPipelineLayoutCreateInfo.pSetLayouts = &descriptorSetLayout;
 
-		    VK_CHECK_RESULT(vkCreatePipelineLayout(device[gpuID], &pPipelineLayoutCreateInfo, nullptr, &pipelineLayout));
+		    VK_CHECK_RESULT(vkCreatePipelineLayout(device[gpuID], &pPipelineLayoutCreateInfo, nullptr, &pipelineLayout[gpuID]));
         }
 	}
 
-	void setupDescriptorSet()
-	{
-		// Allocate a new descriptor set from the global descriptor pool
-		VkDescriptorSetAllocateInfo allocInfo = {};
-		allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-		allocInfo.descriptorPool = descriptorPool;
-		allocInfo.descriptorSetCount = 1;
-		allocInfo.pSetLayouts = &descriptorSetLayout;
-
+    void setupDescriptorSet()
+    {
         int totalDevices[] = { 0, 1 };
         for (int gpuID : totalDevices)
         {
-		    VK_CHECK_RESULT(vkAllocateDescriptorSets(device[gpuID], &allocInfo, &descriptorSet));
+            // Allocate a new descriptor set from the global descriptor pool
+            VkDescriptorSetAllocateInfo allocInfo = {};
+            allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+            allocInfo.descriptorPool = descriptorPool[gpuID];
+            allocInfo.descriptorSetCount = 1;
+            allocInfo.pSetLayouts = &descriptorSetLayout;
 
-		    // Update the descriptor set determining the shader binding points
-		    // For every binding point used in a shader there needs to be one
-		    // descriptor set matching that binding point
+            VK_CHECK_RESULT(vkAllocateDescriptorSets(device[gpuID], &allocInfo, &descriptorSet));
 
-		    VkWriteDescriptorSet writeDescriptorSet = {};
+            // Update the descriptor set determining the shader binding points
+            // For every binding point used in a shader there needs to be one
+            // descriptor set matching that binding point
 
-		    // Binding 0 : Uniform buffer
-		    writeDescriptorSet.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-		    writeDescriptorSet.dstSet = descriptorSet;
-		    writeDescriptorSet.descriptorCount = 1;
-		    writeDescriptorSet.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-		    writeDescriptorSet.pBufferInfo = &uniformDataVS.descriptor;
-		    // Binds this uniform buffer to binding point 0
-		    writeDescriptorSet.dstBinding = 0;
+            VkWriteDescriptorSet writeDescriptorSet = {};
 
-		    vkUpdateDescriptorSets(device[gpuID], 1, &writeDescriptorSet, 0, nullptr);
+            // Binding 0 : Uniform buffer
+            writeDescriptorSet.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+            writeDescriptorSet.dstSet = descriptorSet;
+            writeDescriptorSet.descriptorCount = 1;
+            writeDescriptorSet.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+            writeDescriptorSet.pBufferInfo = &uniformDataVS[gpuID].descriptor;
+
+            // Binds this uniform buffer to binding point 0
+            writeDescriptorSet.dstBinding = 0;
+
+            vkUpdateDescriptorSets(device[gpuID], 1, &writeDescriptorSet, 0, nullptr);
         }
 	}
 
@@ -966,8 +964,7 @@ public:
 
 		VkGraphicsPipelineCreateInfo pipelineCreateInfo = {};
 		pipelineCreateInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
-		// The layout used for this pipeline (can be shared among multiple pipelines using the same layout)
-		pipelineCreateInfo.layout = pipelineLayout;
+
 		// Renderpass this pipeline is attached to
 		pipelineCreateInfo.renderPass = renderPass[0];
 
@@ -1040,29 +1037,33 @@ public:
 		multisampleState.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
 		multisampleState.pSampleMask = nullptr;
 
-		// Load shaders
-		// Vulkan loads it's shaders from an immediate binary representation called SPIR-V
-		// Shaders are compiled offline from e.g. GLSL using the reference glslang compiler
-		std::array<VkPipelineShaderStageCreateInfo,2> shaderStages;
-		shaderStages[0] = loadShader(getAssetPath() + "shaders/triangle.vert.spv", VK_SHADER_STAGE_VERTEX_BIT);
-		shaderStages[1] = loadShader(getAssetPath() + "shaders/triangle.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT);
+        int totalDevices[] = { 0, 1 };
+        for (int gpuID : totalDevices)
+        {
+		    // Load shaders
+		    // Vulkan loads it's shaders from an immediate binary representation called SPIR-V
+		    // Shaders are compiled offline from e.g. GLSL using the reference glslang compiler
+		    std::array<VkPipelineShaderStageCreateInfo,2> shaderStages;
+		    shaderStages[0] = loadShader(gpuID, getAssetPath() + "shaders/triangle.vert.spv", VK_SHADER_STAGE_VERTEX_BIT);
+		    shaderStages[1] = loadShader(gpuID, getAssetPath() + "shaders/triangle.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT);
 
-		// Assign the pipeline states to the pipeline creation info structure
-		pipelineCreateInfo.stageCount = static_cast<uint32_t>(shaderStages.size());
-		pipelineCreateInfo.pStages = shaderStages.data();
-		pipelineCreateInfo.pVertexInputState = &vertices.inputState;
-		pipelineCreateInfo.pInputAssemblyState = &inputAssemblyState;
-		pipelineCreateInfo.pRasterizationState = &rasterizationState;
-		pipelineCreateInfo.pColorBlendState = &colorBlendState;
-		pipelineCreateInfo.pMultisampleState = &multisampleState;
-		pipelineCreateInfo.pViewportState = &viewportState;
-		pipelineCreateInfo.pDepthStencilState = &depthStencilState;
-		pipelineCreateInfo.renderPass = renderPass[0];
-		pipelineCreateInfo.pDynamicState = &dynamicState;
+		    // Assign the pipeline states to the pipeline creation info structure
+		    pipelineCreateInfo.stageCount = static_cast<uint32_t>(shaderStages.size());
+		    pipelineCreateInfo.pStages = shaderStages.data();
+		    pipelineCreateInfo.pVertexInputState = &vertices.inputState;
+		    pipelineCreateInfo.pInputAssemblyState = &inputAssemblyState;
+		    pipelineCreateInfo.pRasterizationState = &rasterizationState;
+		    pipelineCreateInfo.pColorBlendState = &colorBlendState;
+		    pipelineCreateInfo.pMultisampleState = &multisampleState;
+		    pipelineCreateInfo.pViewportState = &viewportState;
+		    pipelineCreateInfo.pDepthStencilState = &depthStencilState;
+		    pipelineCreateInfo.renderPass = renderPass[gpuID];
+		    pipelineCreateInfo.pDynamicState = &dynamicState;
 
-		// Create rendering pipeline using the specified states
-		VK_CHECK_RESULT(vkCreateGraphicsPipelines(device[0], pipelineCache, 1, &pipelineCreateInfo, nullptr, &pipeline[0]));
-        VK_CHECK_RESULT(vkCreateGraphicsPipelines(device[1], pipelineCache, 1, &pipelineCreateInfo, nullptr, &pipeline[1]));
+            // The layout used for this pipeline (can be shared among multiple pipelines using the same layout)
+            pipelineCreateInfo.layout = pipelineLayout[gpuID];
+            VK_CHECK_RESULT(vkCreateGraphicsPipelines(device[gpuID], pipelineCache, 1, &pipelineCreateInfo, nullptr, &pipeline[gpuID]));
+        }
 	}
 
 	void prepareUniformBuffers()
@@ -1088,9 +1089,9 @@ public:
         int totalDevices[] = { 0, 1 };
         for (int gpuID : totalDevices)
         {
-		    VK_CHECK_RESULT(vkCreateBuffer(device[gpuID], &bufferInfo, nullptr, &uniformDataVS.buffer));
+		    VK_CHECK_RESULT(vkCreateBuffer(device[gpuID], &bufferInfo, nullptr, &uniformDataVS[gpuID].buffer));
 		    // Get memory requirements including size, alignment and memory type 
-		    vkGetBufferMemoryRequirements(device[gpuID], uniformDataVS.buffer, &memReqs);
+		    vkGetBufferMemoryRequirements(device[gpuID], uniformDataVS[gpuID].buffer, &memReqs);
 		    allocInfo.allocationSize = memReqs.size;
 		    // Get the memory type index that supports host visibile memory access
 		    // Most implementations offer multiple memory types and selecting the correct one to allocate memory from is crucial
@@ -1098,15 +1099,15 @@ public:
 		    // Note: This may affect performance so you might not want to do this in a real world application that updates buffers on a regular base
 		    allocInfo.memoryTypeIndex = getMemoryTypeIndex(memReqs.memoryTypeBits, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
 		    // Allocate memory for the uniform buffer
-		    VK_CHECK_RESULT(vkAllocateMemory(device[gpuID], &allocInfo, nullptr, &(uniformDataVS.memory)));
+		    VK_CHECK_RESULT(vkAllocateMemory(device[gpuID], &allocInfo, nullptr, &(uniformDataVS[gpuID].memory)));
 		    // Bind memory to buffer
-		    VK_CHECK_RESULT(vkBindBufferMemory(device[gpuID], uniformDataVS.buffer, uniformDataVS.memory, 0));
+		    VK_CHECK_RESULT(vkBindBufferMemory(device[gpuID], uniformDataVS[gpuID].buffer, uniformDataVS[gpuID].memory, 0));
         
 		
 		    // Store information in the uniform's descriptor that is used by the descriptor set
-		    uniformDataVS.descriptor.buffer = uniformDataVS.buffer;
-		    uniformDataVS.descriptor.offset = 0;
-		    uniformDataVS.descriptor.range = sizeof(uboVS);
+		    uniformDataVS[gpuID].descriptor.buffer = uniformDataVS[gpuID].buffer;
+		    uniformDataVS[gpuID].descriptor.offset = 0;
+		    uniformDataVS[gpuID].descriptor.range = sizeof(uboVS);
 
 		    updateUniformBuffers();
         }
@@ -1129,11 +1130,11 @@ public:
         for (int gpuID : totalDevices)
         {
 		    uint8_t *pData;
-		    VK_CHECK_RESULT(vkMapMemory(device[gpuID], uniformDataVS.memory, 0, sizeof(uboVS), 0, (void **)&pData));
+		    VK_CHECK_RESULT(vkMapMemory(device[gpuID], uniformDataVS[gpuID].memory, 0, sizeof(uboVS), 0, (void **)&pData));
 		    memcpy(pData, &uboVS, sizeof(uboVS));
 		    // Unmap after data has been copied
 		    // Note: Since we requested a host coherent memory type for the uniform buffer, the write is instantly visible to the GPU
-		    vkUnmapMemory(device[gpuID], uniformDataVS.memory);
+		    vkUnmapMemory(device[gpuID], uniformDataVS[gpuID].memory);
         }
 	}
 
@@ -1142,11 +1143,11 @@ public:
 		VulkanExampleBase::prepare();
 		prepareSynchronizationPrimitives();
 		prepareVertices(USE_STAGING);
-		// prepareUniformBuffers();
-		// setupDescriptorSetLayout();
+		prepareUniformBuffers();
+		setupDescriptorSetLayout();
 		preparePipelines();
-		//setupDescriptorPool();
-		//setupDescriptorSet();
+		setupDescriptorPool();
+		setupDescriptorSet();
 		
         // Build Command Buffer on 2 GPUs
         buildCommandBuffers(0);
