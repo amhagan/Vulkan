@@ -774,14 +774,14 @@ VulkanExampleBase::~VulkanExampleBase()
 
         for (auto& shaderModule : shaderModules)
         {
-            vkDestroyShaderModule(device[gpuID], shaderModule, nullptr);
+            //vkDestroyShaderModule(device[gpuID], shaderModule, nullptr);
         }
 
         vkDestroyImageView(device[gpuID], depthStencil[gpuID].view,  nullptr);
         vkDestroyImage(device[gpuID],     depthStencil[gpuID].image, nullptr);
         vkFreeMemory(device[gpuID],       depthStencil[gpuID].mem,   nullptr);
 
-        vkDestroyPipelineCache(device[gpuID], pipelineCache, nullptr);
+        // vkDestroyPipelineCache(device[gpuID], pipelineCache, nullptr);
     }
 
 	if (textureLoader)

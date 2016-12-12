@@ -28,7 +28,7 @@
 
 #define VERTEX_BUFFER_BIND_ID 0
 // Set to "true" to enable Vulkan's validation layers (see vulkandebug.cpp for details)
-#define ENABLE_VALIDATION true
+#define ENABLE_VALIDATION false
 // Set to "true" to use staging buffers for uploading vertex and index data to device local memory
 // See "prepareVertices" for details on what's staging and on why to use it
 #define USE_STAGING true
@@ -328,6 +328,59 @@ public:
 
 			vkCmdEndRenderPass(drawCmdBuffers[gpuId][i]);
 
+            ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+            // Do a image copy to part of the dst image - checks should stay small
+            VkImageCopy cregion;
+            cregion.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+            cregion.srcSubresource.mipLevel = 0;
+            cregion.srcSubresource.baseArrayLayer = 0;
+            cregion.srcSubresource.layerCount = 1;
+            cregion.srcOffset.x = 0;
+            cregion.srcOffset.y = 0;
+            cregion.srcOffset.z = 0;
+             
+            cregion.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+            cregion.dstSubresource.mipLevel = 0;
+            cregion.dstSubresource.baseArrayLayer = 0;
+            cregion.dstSubresource.layerCount = 1;
+            cregion.dstOffset.x = 0;
+            cregion.dstOffset.y = 0;
+            cregion.dstOffset.z = 0;
+            cregion.extent.width = width;
+            cregion.extent.height = height;
+            cregion.extent.depth = 1;
+             
+
+            if(gpuId == 1)
+            {
+                vkCmdCopyImage(drawCmdBuffers[gpuId][i],
+                    swapChain[1].buffers[i].image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                    swapChain[0].buffers[i].image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                    1, &cregion);   
+            }
+
+//             VkClearColorValue clear_color = {
+//                 { 1.0f, 0.8f, 0.4f, 0.0f }
+//             };
+//             
+//             VkImageSubresourceRange image_subresource_range = {
+//                 VK_IMAGE_ASPECT_COLOR_BIT,                    // VkImageAspectFlags                     aspectMask
+//                 0,                                            // uint32_t                               baseMipLevel
+//                 1,                                            // uint32_t                               levelCount
+//                 0,                                            // uint32_t                               baseArrayLayer
+//                 1                                             // uint32_t                               layerCount
+//             };
+// 
+//             vkCmdClearColorImage(
+//                 drawCmdBuffers[gpuId][i],
+//                 swapChain[gpuId].buffers[i].image,
+//                 VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 
+//                 &clear_color, 
+//                 1, 
+//                 &image_subresource_range
+//             );
+            ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 			// Ending the render pass will add an implicit barrier transitioning the frame buffer color attachment to 
 			// VK_IMAGE_LAYOUT_PRESENT_SRC_KHR for presenting it to the windowing system
 			VK_CHECK_RESULT(vkEndCommandBuffer(drawCmdBuffers[gpuId][i]));
@@ -336,13 +389,12 @@ public:
 
 	void draw()
 	{
-     
+        // Get next image in the swap chain (back/front buffer)
+        VK_CHECK_RESULT(swapChain[0].acquireNextImage(presentCompleteSemaphore[0], &currentBuffer));
+
         int totalDevices[] = { 0,1 };
         for (int gpuID : totalDevices)
         {       
-            // Get next image in the swap chain (back/front buffer)
-            VK_CHECK_RESULT(swapChain[gpuID].acquireNextImage(presentCompleteSemaphore[gpuID], &currentBuffer));
-
             // Use a fence to wait until the command buffer has finished execution before using it again
             VK_CHECK_RESULT(vkWaitForFences(device[gpuID], 1, &waitFences[gpuID][currentBuffer], VK_TRUE, UINT64_MAX));
             VK_CHECK_RESULT(vkResetFences(device[gpuID], 1, &waitFences[gpuID][currentBuffer]));
@@ -407,44 +459,11 @@ public:
         //            &imageBlit,
         //            VK_FILTER_LINEAR);
 
- 
-        ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-        // Do a image copy to part of the dst image - checks should stay small
-        VkImageCopy cregion;
-        cregion.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-        cregion.srcSubresource.mipLevel = 0;
-        cregion.srcSubresource.baseArrayLayer = 0;
-        cregion.srcSubresource.layerCount = 1;
-        cregion.srcOffset.x = 0;
-        cregion.srcOffset.y = 0;
-        cregion.srcOffset.z = 0;
-
-        cregion.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-        cregion.dstSubresource.mipLevel = 0;
-        cregion.dstSubresource.baseArrayLayer = 0;
-        cregion.dstSubresource.layerCount = 1;
-        cregion.dstOffset.x = 0;
-        cregion.dstOffset.y = height / 2;
-        cregion.dstOffset.z = 0;
-        cregion.extent.width = width;
-        cregion.extent.height = height;
-        cregion.extent.depth = 1;
-
-        VkCommandBuffer copyCmd = VulkanExampleBase::createCommandBuffer(1, VK_COMMAND_BUFFER_LEVEL_PRIMARY, true);
-
-        vkCmdCopyImage(copyCmd,
-            swapChain[1].buffers[currentBuffer].image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-            swapChain[0].buffers[currentBuffer].image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-            1, &cregion);
-
-        ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
         // Present the current buffer to the swap chain
         // Pass the semaphore signaled by the command buffer submission from the submit info as the wait semaphore for swap chain presentation
         // This ensures that the image is not presented to the windowing system until all commands have been submitted
         VK_CHECK_RESULT(swapChain[0].queuePresent(queue[0], currentBuffer, VK_NULL_HANDLE));
-        //VK_CHECK_RESULT(swapChain[1].queuePresent(queue[1], currentBuffer, VK_NULL_HANDLE));
+        // VK_CHECK_RESULT(swapChain[1].queuePresent(queue[1], currentBuffer, VK_NULL_HANDLE));
 	}
 
 	// Prepare vertex and index buffers for an indexed triangle

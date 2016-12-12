@@ -458,12 +458,14 @@ public:
 		presentInfo.swapchainCount = 1;
 		presentInfo.pSwapchains = &swapChain;
 		presentInfo.pImageIndices = &imageIndex;
+
 		// Check if a wait semaphore has been specified to wait for before presenting the image
 		if (waitSemaphore != VK_NULL_HANDLE)
 		{
 			presentInfo.pWaitSemaphores = &waitSemaphore;
 			presentInfo.waitSemaphoreCount = 1;
 		}
+
 		return fpQueuePresentKHR(queue, &presentInfo);
 	}
 
