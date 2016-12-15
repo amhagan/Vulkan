@@ -330,55 +330,57 @@ public:
 
             ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
             // Do a image copy to part of the dst image - checks should stay small
-            VkImageCopy cregion;
-            cregion.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-            cregion.srcSubresource.mipLevel = 0;
-            cregion.srcSubresource.baseArrayLayer = 0;
-            cregion.srcSubresource.layerCount = 1;
-            cregion.srcOffset.x = 0;
-            cregion.srcOffset.y = 0;
-            cregion.srcOffset.z = 0;
-             
-            cregion.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-            cregion.dstSubresource.mipLevel = 0;
-            cregion.dstSubresource.baseArrayLayer = 0;
-            cregion.dstSubresource.layerCount = 1;
-            cregion.dstOffset.x = 0;
-            cregion.dstOffset.y = 0;
-            cregion.dstOffset.z = 0;
-            cregion.extent.width = width;
-            cregion.extent.height = height;
-            cregion.extent.depth = 1;
-             
-
-            if(gpuId == 1)
+            if (gpuId == 0)
             {
-                vkCmdCopyImage(drawCmdBuffers[gpuId][i],
+                VkImageCopy cregion;
+                cregion.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+                cregion.srcSubresource.mipLevel = 0;
+                cregion.srcSubresource.baseArrayLayer = 0;
+                cregion.srcSubresource.layerCount = 1;
+                cregion.srcOffset.x = 0;
+                cregion.srcOffset.y = 0;
+                cregion.srcOffset.z = 0;
+             
+                cregion.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+                cregion.dstSubresource.mipLevel = 0;
+                cregion.dstSubresource.baseArrayLayer = 0;
+                cregion.dstSubresource.layerCount = 1;
+                cregion.dstOffset.x = 0;
+                cregion.dstOffset.y = 0;
+                cregion.dstOffset.z = 0;
+                cregion.extent.width = width;
+                cregion.extent.height = height;
+                cregion.extent.depth = 1;
+             
+                vkCmdCopyImage(drawCmdBuffers[0][i],
                     swapChain[1].buffers[i].image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
                     swapChain[0].buffers[i].image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                    1, &cregion);   
+                    1, &cregion);
             }
 
-//             VkClearColorValue clear_color = {
-//                 { 1.0f, 0.8f, 0.4f, 0.0f }
-//             };
-//             
-//             VkImageSubresourceRange image_subresource_range = {
-//                 VK_IMAGE_ASPECT_COLOR_BIT,                    // VkImageAspectFlags                     aspectMask
-//                 0,                                            // uint32_t                               baseMipLevel
-//                 1,                                            // uint32_t                               levelCount
-//                 0,                                            // uint32_t                               baseArrayLayer
-//                 1                                             // uint32_t                               layerCount
-//             };
-// 
-//             vkCmdClearColorImage(
-//                 drawCmdBuffers[gpuId][i],
-//                 swapChain[gpuId].buffers[i].image,
-//                 VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 
-//                 &clear_color, 
-//                 1, 
-//                 &image_subresource_range
-//             );
+            if (gpuId == 1)
+            {
+                 VkClearColorValue clear_color = {
+                     { 1.0f, 0.8f, 0.4f, 0.0f }
+                 };
+             
+                 VkImageSubresourceRange image_subresource_range = {
+                     VK_IMAGE_ASPECT_COLOR_BIT,                    // VkImageAspectFlags                     aspectMask
+                     0,                                            // uint32_t                               baseMipLevel
+                     1,                                            // uint32_t                               levelCount
+                     0,                                            // uint32_t                               baseArrayLayer
+                     1                                             // uint32_t                               layerCount
+                 };
+ 
+                 vkCmdClearColorImage(
+                     drawCmdBuffers[gpuId][i],
+                     swapChain[gpuId].buffers[i].image,
+                     VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 
+                     &clear_color, 
+                     1, 
+                     &image_subresource_range
+                 );
+            }
             ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 			// Ending the render pass will add an implicit barrier transitioning the frame buffer color attachment to 
@@ -392,9 +394,10 @@ public:
         // Get next image in the swap chain (back/front buffer)
         VK_CHECK_RESULT(swapChain[0].acquireNextImage(presentCompleteSemaphore[0], &currentBuffer));
 
-        int totalDevices[] = { 0,1 };
+        int totalDevices[] = { 1, 0 };
         for (int gpuID : totalDevices)
         {       
+            
             // Use a fence to wait until the command buffer has finished execution before using it again
             VK_CHECK_RESULT(vkWaitForFences(device[gpuID], 1, &waitFences[gpuID][currentBuffer], VK_TRUE, UINT64_MAX));
             VK_CHECK_RESULT(vkResetFences(device[gpuID], 1, &waitFences[gpuID][currentBuffer]));
@@ -425,45 +428,12 @@ public:
 
             // Submit to the graphics queue passing a wait fence
             VK_CHECK_RESULT(vkQueueSubmit(queue[gpuID], 1, &submitInfo, waitFences[gpuID][currentBuffer]));
-           
         }
-
-        ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-        // Copy + Blit from GPU 1 to GPU 0
-        // Buffer copies have to be submitted to a queue, so we need a command buffer for them
-        // Note: Some devices offer a dedicated transfer queue (with only the transfer bit set) that may be faster when doing lots of copies
-        // Source
-        //VkImageBlit imageBlit{};
-        //imageBlit.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-        //imageBlit.srcSubresource.layerCount = 1;
-        //imageBlit.srcSubresource.mipLevel = 0;
-        //imageBlit.srcOffsets[1].x = int32_t(width);
-        //imageBlit.srcOffsets[1].y = int32_t(height) / 2;
-        //imageBlit.srcOffsets[1].z = 1;
-        //
-        //// Destination
-        //imageBlit.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-        //imageBlit.dstSubresource.layerCount = 1;
-        //imageBlit.dstSubresource.mipLevel = 0;
-        //imageBlit.dstOffsets[1].x = int32_t(width);
-        //imageBlit.dstOffsets[1].y = int32_t(height);
-        //imageBlit.dstOffsets[1].z = 1;
-
-        //VkCommandBuffer copyCmd = VulkanExampleBase::createCommandBuffer(0, VK_COMMAND_BUFFER_LEVEL_PRIMARY, true);
-
-        //// vkCmdCopyImage
-        //vkCmdBlitImage(copyCmd,
-        //            swapChain[1].buffers[currentBuffer].image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-        //            swapChain[0].buffers[currentBuffer].image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-        //            1,
-        //            &imageBlit,
-        //            VK_FILTER_LINEAR);
 
         // Present the current buffer to the swap chain
         // Pass the semaphore signaled by the command buffer submission from the submit info as the wait semaphore for swap chain presentation
         // This ensures that the image is not presented to the windowing system until all commands have been submitted
         VK_CHECK_RESULT(swapChain[0].queuePresent(queue[0], currentBuffer, VK_NULL_HANDLE));
-        // VK_CHECK_RESULT(swapChain[1].queuePresent(queue[1], currentBuffer, VK_NULL_HANDLE));
 	}
 
 	// Prepare vertex and index buffers for an indexed triangle
@@ -899,8 +869,12 @@ public:
 		    attachments[0].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;					// We don't use stencil, so don't care for load
 		    attachments[0].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;				// Same for store
 		    attachments[0].initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;						// Layout at render pass start. Initial doesn't matter, so we use undefined
-		    attachments[0].finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;					// Layout to which the attachment is transitioned when the render pass is finished
-																						    // As we want to present the color buffer to the swapchain, we transition to PRESENT_KHR	
+		    
+            if(totalDevices == 0)
+                attachments[0].finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;					// Layout to which the attachment is transitioned when the render pass is finished
+            else
+                attachments[0].finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;		    // Layout to which the attachment is transitioned when the render pass is finished
+																						        // As we want to present the color buffer to the swapchain, we transition to PRESENT_KHR	
 		    // Depth attachment
 		    attachments[1].format = depthFormat;								
 		    attachments[1].samples = VK_SAMPLE_COUNT_1_BIT;						
