@@ -793,9 +793,9 @@ VulkanExampleBase::~VulkanExampleBase()
     {
 	    vkDestroyCommandPool(device[gpuID], cmdPool[gpuID], nullptr);
 
-	    vkDestroySemaphore(device[gpuID], semaphores.presentComplete, nullptr);
-	    vkDestroySemaphore(device[gpuID], semaphores.renderComplete, nullptr);
-	    vkDestroySemaphore(device[gpuID], semaphores.textOverlayComplete, nullptr);
+// 	    vkDestroySemaphore(device[gpuID], semaphores.presentComplete, nullptr);
+// 	    vkDestroySemaphore(device[gpuID], semaphores.renderComplete, nullptr);
+// 	    vkDestroySemaphore(device[gpuID], semaphores.textOverlayComplete, nullptr);
     }
     
 	if (enableTextOverlay)
@@ -863,7 +863,8 @@ void VulkanExampleBase::initVulkan(bool enableValidation)
 		vkTools::exitFatal("Could not enumerate phyiscal devices : \n" + vkTools::errorString(err), "Fatal error");
 	}
 
-    
+    std::reverse(physicalDevices.begin(), physicalDevices.end());
+
     int totalDevices[] = { 0, 1 };
     for (int gpuId : totalDevices)
     {

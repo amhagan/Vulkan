@@ -338,7 +338,7 @@ public:
                 cregion.srcSubresource.baseArrayLayer = 0;
                 cregion.srcSubresource.layerCount = 1;
                 cregion.srcOffset.x = 0;
-                cregion.srcOffset.y = 0;
+                cregion.srcOffset.y = height/2;
                 cregion.srcOffset.z = 0;
              
                 cregion.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
@@ -348,8 +348,9 @@ public:
                 cregion.dstOffset.x = 0;
                 cregion.dstOffset.y = 0;
                 cregion.dstOffset.z = 0;
-                cregion.extent.width = width;
-                cregion.extent.height = height;
+
+                cregion.extent.width = width/10;
+                cregion.extent.height = height/10;
                 cregion.extent.depth = 1;
              
                 vkCmdCopyImage(drawCmdBuffers[0][i],
@@ -357,31 +358,6 @@ public:
                     swapChain[0].buffers[i].image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
                     1, &cregion);
             }
-
-            if (gpuId == 1)
-            {
-                 VkClearColorValue clear_color = {
-                     { 1.0f, 0.8f, 0.4f, 0.0f }
-                 };
-             
-                 VkImageSubresourceRange image_subresource_range = {
-                     VK_IMAGE_ASPECT_COLOR_BIT,                    // VkImageAspectFlags                     aspectMask
-                     0,                                            // uint32_t                               baseMipLevel
-                     1,                                            // uint32_t                               levelCount
-                     0,                                            // uint32_t                               baseArrayLayer
-                     1                                             // uint32_t                               layerCount
-                 };
- 
-                 vkCmdClearColorImage(
-                     drawCmdBuffers[gpuId][i],
-                     swapChain[gpuId].buffers[i].image,
-                     VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 
-                     &clear_color, 
-                     1, 
-                     &image_subresource_range
-                 );
-            }
-            ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 			// Ending the render pass will add an implicit barrier transitioning the frame buffer color attachment to 
 			// VK_IMAGE_LAYOUT_PRESENT_SRC_KHR for presenting it to the windowing system
@@ -392,48 +368,31 @@ public:
 	void draw()
 	{
         // Get next image in the swap chain (back/front buffer)
-        VK_CHECK_RESULT(swapChain[0].acquireNextImage(presentCompleteSemaphore[0], &currentBuffer));
+        VK_CHECK_RESULT(swapChain[1].acquireNextImage(VK_NULL_HANDLE, &currentBuffer));
 
         int totalDevices[] = { 1, 0 };
         for (int gpuID : totalDevices)
-        {       
-            
-            // Use a fence to wait until the command buffer has finished execution before using it again
-            VK_CHECK_RESULT(vkWaitForFences(device[gpuID], 1, &waitFences[gpuID][currentBuffer], VK_TRUE, UINT64_MAX));
-            VK_CHECK_RESULT(vkResetFences(device[gpuID], 1, &waitFences[gpuID][currentBuffer]));
-       
+        {                 
             // Pipeline stage at which the queue submission will wait (via pWaitSemaphores)
             VkPipelineStageFlags waitStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
             
             // The submit info structure specifices a command buffer queue submission batch
             VkSubmitInfo submitInfo = {};
             submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-            submitInfo.pWaitDstStageMask = &waitStageMask;									// Pointer to the list of pipeline stages that the semaphore waits will occur at
-            
-            if(gpuID == 0)
-            {   
-                submitInfo.pWaitSemaphores = presentCompleteSemaphore;							// Semaphore(s) to wait upon before the submitted command buffer starts executing
-                submitInfo.waitSemaphoreCount = 1;												// One wait semaphore																				
-            }
-            else
-            {
-                submitInfo.pWaitSemaphores = VK_NULL_HANDLE;							        // Semaphore(s) to wait upon before the submitted command buffer starts executing
-                submitInfo.waitSemaphoreCount = 0;												// One wait semaphore																				
-            }
-
-            submitInfo.pSignalSemaphores = &renderCompleteSemaphore[gpuID];						// Semaphore(s) to be signaled when command buffers have completed
+            submitInfo.pWaitDstStageMask = &waitStageMask;									// Pointer to the list of pipeline stages that the semaphore waits will occur at 
+            submitInfo.pWaitSemaphores = VK_NULL_HANDLE;							        // Semaphore(s) to wait upon before the submitted command buffer starts executing
+            submitInfo.waitSemaphoreCount = 0;												// One wait semaphore																				
             submitInfo.signalSemaphoreCount = 0;											// One signal semaphore
-            submitInfo.pCommandBuffers = &drawCmdBuffers[gpuID][currentBuffer];					// Command buffers(s) to execute in this batch (submission)
+            submitInfo.pCommandBuffers = &drawCmdBuffers[gpuID][currentBuffer];			    // Command buffers(s) to execute in this batch (submission)
             submitInfo.commandBufferCount = 1;												// One command buffer
 
             // Submit to the graphics queue passing a wait fence
-            VK_CHECK_RESULT(vkQueueSubmit(queue[gpuID], 1, &submitInfo, waitFences[gpuID][currentBuffer]));
+            VK_CHECK_RESULT(vkQueueSubmit(queue[gpuID], 1, &submitInfo, VK_NULL_HANDLE));
         }
 
         // Present the current buffer to the swap chain
-        // Pass the semaphore signaled by the command buffer submission from the submit info as the wait semaphore for swap chain presentation
         // This ensures that the image is not presented to the windowing system until all commands have been submitted
-        VK_CHECK_RESULT(swapChain[0].queuePresent(queue[0], currentBuffer, VK_NULL_HANDLE));
+        VK_CHECK_RESULT(swapChain[1].queuePresent(queue[1], currentBuffer, VK_NULL_HANDLE));
 	}
 
 	// Prepare vertex and index buffers for an indexed triangle
@@ -870,7 +829,7 @@ public:
 		    attachments[0].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;				// Same for store
 		    attachments[0].initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;						// Layout at render pass start. Initial doesn't matter, so we use undefined
 		    
-            if(totalDevices == 0)
+            if(gpuID == 0)
                 attachments[0].finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;					// Layout to which the attachment is transitioned when the render pass is finished
             else
                 attachments[0].finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;		    // Layout to which the attachment is transitioned when the render pass is finished
