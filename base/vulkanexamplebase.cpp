@@ -863,7 +863,7 @@ void VulkanExampleBase::initVulkan(bool enableValidation)
 		vkTools::exitFatal("Could not enumerate phyiscal devices : \n" + vkTools::errorString(err), "Fatal error");
 	}
 
-    std::reverse(physicalDevices.begin(), physicalDevices.end());
+    // std::reverse(physicalDevices.begin(), physicalDevices.end());
 
     int totalDevices[] = { 0, 1 };
     for (int gpuId : totalDevices)
